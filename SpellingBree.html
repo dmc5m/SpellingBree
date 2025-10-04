@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head> 
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spelling Game</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; margin-top: 3rem; }
+    input { font-size: 1.5rem; text-align: center; }
+    button { margin: 1rem; padding: 0.5rem 1rem; font-size: 1rem; }
+    #feedback { font-size: 1.3rem; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>🗣️ Spelling Game</h1>
+  <button id="nextWord">Next Word</button>
+  <div id="currentWord" style="display:none;"></div>
+  <input id="answer" placeholder="Type the spelling here" />
+  <div id="feedback"></div>
+
+  <script>
+    const levels = {
+      1: ["cat", "dog", "sun", "hat"],
+      2: ["apple", "green", "chair", "cloud"],
+      3: ["simple", "castle", "wonder", "puzzle"]
+    };
+    let currentLevel = 1;
+    let currentWord = "";
+    const rate = -15; // slower speech
+
+    const API_BASE = "https://gratitude-web-app4-gsfxc4cpfugcggbt.westus-01.azurewebsites.net";
+
+    async function speak(text) {
+      const params = new URLSearchParams({ text, rate });
+      const res = await fetch(`${API_BASE}/api/tts?${params.toString()}`, {
+        method: "GET"
+      });
+
+      if (!res.ok) {
+        console.error("TTS error:", await res.text());
+        return;
+      }
+
+      const blob = await res.blob();
+      const audio = new Audio(URL.createObjectURL(blob));
+      audio.play();
+    }
+
+    function pickWord() {
+      const words = levels[currentLevel];
+      currentWord = words[Math.floor(Math.random() * words.length)];
+      document.getElementById("currentWord").textContent = currentWord;
+      speak(`Please spell the word ${currentWord}.`);
+    }
+
+    document.getElementById("nextWord").onclick = pickWord;
+
+    document.getElementById("answer").addEventListener("change", async e => {
+      const answer = e.target.value.trim().toLowerCase();
+      const feedbackEl = document.getElementById("feedback");
+
+      if (answer === currentWord.toLowerCase()) {
+        feedbackEl.textContent = "✅ Correct!";
+        await speak(`Correct! ${currentWord} is spelled ${currentWord}.`);
+      } else {
+        feedbackEl.textContent = "❌ Try again!";
+        await speak(`Not quite. Let's try again.`);
+      }
+
+      e.target.value = "";
+    });
+  </script>
+</body>
+</html>
