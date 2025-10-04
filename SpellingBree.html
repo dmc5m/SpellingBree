@@ -14,6 +14,13 @@ window.onload = () => {
     3: ["simple", "castle", "wonder", "puzzle"]
   };
   let currentLevel = 1;
+  let correctCount = 0;
+  let attempts = 0;
+  // Load saved progress
+  const savedLevel = localStorage.getItem("level");
+  const savedCorrect = localStorage.getItem("correctCount");
+  if (savedLevel) currentLevel = parseInt(savedLevel);
+  if (savedCorrect) correctCount = parseInt(savedCorrect);
   let currentWord = "";
   const rate = -15; // slower speech
 
@@ -35,19 +42,30 @@ window.onload = () => {
   function pickWord() {
     const words = levels[currentLevel];
     currentWord = words[Math.floor(Math.random() * words.length)];
-    document.getElementById("currentWord").textContent = currentWord;
-    speak(`Please spell the word ${currentWord}.`);
+    document.getElementById("currentWord").textContent = `Level ${currentLevel}: ${currentWord}`;
+    document.getElementById("feedback").textContent = `⭐ ${correctCount} correct out of ${attempts}`;
+    speak(`Level ${currentLevel}. Please spell the word ${currentWord}.`);
   }
 
   document.getElementById("nextWord").onclick = pickWord;
 
   document.getElementById("answer").addEventListener("change", async e => {
+    attempts++;
     const answer = e.target.value.trim().toLowerCase();
     const feedbackEl = document.getElementById("feedback");
 
     if (answer === currentWord.toLowerCase()) {
-      feedbackEl.textContent = ""; // No text feedback, only voice
-      await speak(`Correct! ${currentWord} is spelled ${currentWord}.`);
+      correctCount++;
+      localStorage.setItem("correctCount", correctCount);
+      localStorage.setItem("level", currentLevel);
+      feedbackEl.textContent = "";
+      await speak(`Great job! You spelled ${currentWord} correctly.`);
+      if (correctCount % 5 === 0 && currentLevel < Object.keys(levels).length) {
+        currentLevel++;
+        localStorage.setItem("level", currentLevel);
+        await speak(`Excellent! Moving on to level ${currentLevel}.`);
+      }
+      document.getElementById("feedback").textContent = `⭐ ${correctCount} correct out of ${attempts}`;
     } else {
       feedbackEl.textContent = ""; // Remove thinking/gpt feedback from page
       try {
@@ -74,6 +92,7 @@ window.onload = () => {
       } catch (err) {
         console.error("Error fetching speller-voice audio:", err);
       }
+      document.getElementById("feedback").textContent = `⭐ ${correctCount} correct out of ${attempts}`;
     }
 
     e.target.value = "";
