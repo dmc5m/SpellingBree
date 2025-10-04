@@ -1,10 +1,16 @@
 <html>
   <body>
-    <div>
-      <div id="currentWord"></div>
-      <button id="nextWord">Skip</button>
-      <input type="text" id="answer" />
-      <div id="feedback"></div>
+    <div id="splash" style="display:flex; justify-content:center; align-items:center; height:100vh; font-size:3em; font-weight:bold;">
+      Welcome to Spelling Bree
+    </div>
+    <div id="gameUI" style="display:none;">
+      <div>
+        <div id="currentWord"></div>
+        <button id="nextWord">Next Word</button>
+        <button id="sayItAgain" style="display:inline-block;">Say It Again</button>
+        <input type="text" id="answer" />
+        <div id="feedback"></div>
+      </div>
     </div>
     <script>
 window.onload = () => {
@@ -27,36 +33,40 @@ window.onload = () => {
   const API_BASE = "https://gratitude-web-app4-gsfxc4cpfugcggbt.westus-01.azurewebsites.net";
 
   async function speak(text) {
-    const answerInput = document.getElementById("answer");
-    answerInput.disabled = true;
     const params = new URLSearchParams({ text, rate });
     const res = await fetch(`${API_BASE}/api/tts?${params.toString()}`, { method: "GET" });
     if (!res.ok) {
       console.error("TTS error:", await res.text());
-      answerInput.disabled = false;
       return;
     }
     const blob = await res.blob();
     const audio = new Audio(URL.createObjectURL(blob));
-    return new Promise(resolve => {
-      audio.onended = () => {
-        answerInput.disabled = false;
-        answerInput.focus();
-        resolve();
-      };
-      audio.play();
-    });
+    audio.play();
   }
 
-  async function pickWord() {
+  function pickWord() {
     const words = levels[currentLevel];
     currentWord = words[Math.floor(Math.random() * words.length)];
-    document.getElementById("currentWord").textContent = `Level ${currentLevel}`;
+    document.getElementById("currentWord").textContent = `Level ${currentLevel}: ${currentWord}`;
     document.getElementById("feedback").textContent = `⭐ ${correctCount} correct out of ${attempts}`;
-    await speak(`Level ${currentLevel}. Please spell the word.`);
+    speak(`Level ${currentLevel}. Please spell the word ${currentWord}.`);
+  }
+
+  async function wakeApi() {
+    try {
+      await fetch("http://gratitude-web-app4-gsfxc4cpfugcggbt.westus-01.azurewebsites.net/health");
+    } catch (e) {
+      console.error("Error waking API:", e);
+    }
   }
 
   document.getElementById("nextWord").onclick = pickWord;
+
+  document.getElementById("sayItAgain").onclick = () => {
+    if (currentWord) {
+      speak(`Level ${currentLevel}. Please spell the word ${currentWord}.`);
+    }
+  };
 
   document.getElementById("answer").addEventListener("change", async e => {
     attempts++;
@@ -67,15 +77,13 @@ window.onload = () => {
       correctCount++;
       localStorage.setItem("correctCount", correctCount);
       localStorage.setItem("level", currentLevel);
-      await speak(`Great job! You spelled the word correctly.`);
+      await speak(`Great job! You spelled ${currentWord} correctly.`);
       if (correctCount % 5 === 0 && currentLevel < Object.keys(levels).length) {
         currentLevel++;
         localStorage.setItem("level", currentLevel);
         await speak(`Excellent! Moving on to level ${currentLevel}.`);
       }
       document.getElementById("feedback").textContent = `⭐ ${correctCount} correct out of ${attempts}`;
-      e.target.value = "";
-      await pickWord();
     } else {
       try {
         const payload = {
@@ -96,18 +104,25 @@ window.onload = () => {
         }
         const blob = await res.blob();
         const audio = new Audio(URL.createObjectURL(blob));
-        await new Promise(resolve => {
-          audio.onended = resolve;
-          audio.play();
-        });
+        audio.play();
       } catch (err) {
         console.error("Error fetching speller-voice audio:", err);
       }
       document.getElementById("feedback").textContent = `⭐ ${correctCount} correct out of ${attempts}`;
-      e.target.value = "";
-      // retry same word, so do not change currentWord or pick new word
     }
+
+    e.target.value = "";
   });
+
+  // Show splash screen and wait for 3 seconds, then hide splash and show game UI, wake API, and start first word
+  (async () => {
+    await wakeApi();
+    setTimeout(() => {
+      document.getElementById("splash").style.display = "none";
+      document.getElementById("gameUI").style.display = "block";
+      pickWord();
+    }, 3000);
+  })();
 };
 </script>
   </body>
