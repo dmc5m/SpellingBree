@@ -38,7 +38,7 @@ window.onload = () => {
       systemMessage: "You are a kind and encouraging third-grade teacher. Give short, spoken-style feedback about how close their spelling was and a gentle hint if helpful."
     };
 
-    const res = await fetch(`${API_BASE}/api/take-stock`, {
+    const res = await fetch(`${API_BASE}/api/speller`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
