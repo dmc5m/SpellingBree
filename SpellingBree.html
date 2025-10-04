@@ -32,30 +32,6 @@ window.onload = () => {
     audio.play();
   }
 
-  async function getFeedback(misspelling, correct) {
-    const payload = {
-      userInput: `The student spelled "${misspelling}" instead of "${correct}".`,
-      systemMessage: "You are a kind and encouraging third-grade teacher. Give short, spoken-style feedback about how close their spelling was and a gentle hint if helpful."
-    };
-
-    const res = await fetch(`${API_BASE}/api/speller`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": API_KEY
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!res.ok) {
-      console.error("GPT error:", await res.text());
-      return "Hmm, something went wrong generating feedback.";
-    }
-
-    const data = await res.json();
-    return data.coachReply || "Good try! Let's keep practicing.";
-  }
-
   function pickWord() {
     const words = levels[currentLevel];
     currentWord = words[Math.floor(Math.random() * words.length)];
@@ -70,13 +46,34 @@ window.onload = () => {
     const feedbackEl = document.getElementById("feedback");
 
     if (answer === currentWord.toLowerCase()) {
-      feedbackEl.textContent = "✅ Correct!";
+      feedbackEl.textContent = ""; // No text feedback, only voice
       await speak(`Correct! ${currentWord} is spelled ${currentWord}.`);
     } else {
-      feedbackEl.textContent = "⏳ Thinking...";
-      const gptFeedback = await getFeedback(answer, currentWord);
-      feedbackEl.textContent = gptFeedback;
-      await speak(gptFeedback);
+      feedbackEl.textContent = ""; // Remove thinking/gpt feedback from page
+      try {
+        const payload = {
+          misspelling: answer,
+          correct: currentWord,
+          rate
+        };
+        const res = await fetch(`${API_BASE}/api/speller-voice`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-Key": API_KEY
+          },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+          console.error("Speller-voice error:", await res.text());
+          return;
+        }
+        const blob = await res.blob();
+        const audio = new Audio(URL.createObjectURL(blob));
+        audio.play();
+      } catch (err) {
+        console.error("Error fetching speller-voice audio:", err);
+      }
     }
 
     e.target.value = "";
