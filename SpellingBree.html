@@ -2,7 +2,7 @@
   <body>
     <div>
       <div id="currentWord"></div>
-      <button id="nextWord">Next Word</button>
+      <button id="nextWord">Skip</button>
       <input type="text" id="answer" />
       <div id="feedback"></div>
     </div>
@@ -25,26 +25,35 @@ window.onload = () => {
   const rate = -15; // slower speech
 
   const API_BASE = "https://gratitude-web-app4-gsfxc4cpfugcggbt.westus-01.azurewebsites.net";
-  const API_KEY = "YOUR_FIREBASE_API_KEY_HERE"; // replace with your real key
 
   async function speak(text) {
+    const answerInput = document.getElementById("answer");
+    answerInput.disabled = true;
     const params = new URLSearchParams({ text, rate });
     const res = await fetch(`${API_BASE}/api/tts?${params.toString()}`, { method: "GET" });
     if (!res.ok) {
       console.error("TTS error:", await res.text());
+      answerInput.disabled = false;
       return;
     }
     const blob = await res.blob();
     const audio = new Audio(URL.createObjectURL(blob));
-    audio.play();
+    return new Promise(resolve => {
+      audio.onended = () => {
+        answerInput.disabled = false;
+        answerInput.focus();
+        resolve();
+      };
+      audio.play();
+    });
   }
 
-  function pickWord() {
+  async function pickWord() {
     const words = levels[currentLevel];
     currentWord = words[Math.floor(Math.random() * words.length)];
-    document.getElementById("currentWord").textContent = `Level ${currentLevel}: ${currentWord}`;
+    document.getElementById("currentWord").textContent = `Level ${currentLevel}`;
     document.getElementById("feedback").textContent = `⭐ ${correctCount} correct out of ${attempts}`;
-    speak(`Level ${currentLevel}. Please spell the word ${currentWord}.`);
+    await speak(`Level ${currentLevel}. Please spell the word.`);
   }
 
   document.getElementById("nextWord").onclick = pickWord;
@@ -58,16 +67,16 @@ window.onload = () => {
       correctCount++;
       localStorage.setItem("correctCount", correctCount);
       localStorage.setItem("level", currentLevel);
-      feedbackEl.textContent = "";
-      await speak(`Great job! You spelled ${currentWord} correctly.`);
+      await speak(`Great job! You spelled the word correctly.`);
       if (correctCount % 5 === 0 && currentLevel < Object.keys(levels).length) {
         currentLevel++;
         localStorage.setItem("level", currentLevel);
         await speak(`Excellent! Moving on to level ${currentLevel}.`);
       }
       document.getElementById("feedback").textContent = `⭐ ${correctCount} correct out of ${attempts}`;
+      e.target.value = "";
+      await pickWord();
     } else {
-      feedbackEl.textContent = ""; // Remove thinking/gpt feedback from page
       try {
         const payload = {
           misspelling: answer,
@@ -78,7 +87,6 @@ window.onload = () => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-API-Key": API_KEY
           },
           body: JSON.stringify(payload)
         });
@@ -88,14 +96,17 @@ window.onload = () => {
         }
         const blob = await res.blob();
         const audio = new Audio(URL.createObjectURL(blob));
-        audio.play();
+        await new Promise(resolve => {
+          audio.onended = resolve;
+          audio.play();
+        });
       } catch (err) {
         console.error("Error fetching speller-voice audio:", err);
       }
       document.getElementById("feedback").textContent = `⭐ ${correctCount} correct out of ${attempts}`;
+      e.target.value = "";
+      // retry same word, so do not change currentWord or pick new word
     }
-
-    e.target.value = "";
   });
 };
 </script>
