@@ -38,7 +38,10 @@ export default function SpellingBee() {
     const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
     const audioUnlocked = localStorage.getItem("audioUnlocked")
 
+    console.log("[v0] iOS:", isIOS, "Safari:", isSafari, "Audio unlocked:", audioUnlocked)
+
     if ((isIOS || isSafari) && !audioUnlocked) {
+      console.log("[v0] Showing audio unlock screen")
       setNeedsAudioUnlock(true)
       setShowSplash(false)
       return
@@ -65,12 +68,18 @@ export default function SpellingBee() {
   }, [])
 
   async function unlockAudio() {
+    console.log("[v0] unlockAudio called!")
     try {
+      console.log("[v0] Creating audio element...")
       const audio = new Audio()
       audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA"
+      console.log("[v0] Playing audio...")
       await audio.play()
+      console.log("[v0] Audio played successfully")
 
       localStorage.setItem("audioUnlocked", "true")
+      console.log("[v0] Set audioUnlocked in localStorage")
+
       setNeedsAudioUnlock(false)
       setShowSplash(true)
 
@@ -91,7 +100,7 @@ export default function SpellingBee() {
       }
       init()
     } catch (err) {
-      console.error("Error unlocking audio:", err)
+      console.error("[v0] Error unlocking audio:", err)
     }
   }
 
@@ -208,34 +217,56 @@ export default function SpellingBee() {
 
   if (needsAudioUnlock) {
     return (
-      <div className="relative z-50 h-screen bg-gradient-to-br from-primary/20 via-secondary/20 to-accent/20 flex items-center justify-center p-4">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.5 }}
-          className="text-center max-w-md"
-        >
-          <motion.div
-            animate={{ scale: [1, 1.1, 1] }}
-            transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY }}
-            className="mb-8"
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 9999,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          padding: "20px",
+        }}
+      >
+        <div style={{ textAlign: "center", maxWidth: "400px" }}>
+          <Volume2 style={{ width: "80px", height: "80px", margin: "0 auto 20px", color: "white" }} />
+          <h1 style={{ fontSize: "36px", fontWeight: "bold", color: "white", marginBottom: "20px" }}>Enable Audio</h1>
+          <p style={{ fontSize: "18px", color: "rgba(255,255,255,0.9)", marginBottom: "30px" }}>
+            Tap the button below to start
+          </p>
+          <button
+            onClick={(e) => {
+              console.log("[v0] Button onClick fired!")
+              e.preventDefault()
+              unlockAudio()
+            }}
+            onTouchStart={(e) => {
+              console.log("[v0] Button onTouchStart fired!")
+              e.preventDefault()
+              unlockAudio()
+            }}
+            style={{
+              fontSize: "24px",
+              fontWeight: "bold",
+              padding: "20px 40px",
+              backgroundColor: "#48bb78",
+              color: "white",
+              border: "none",
+              borderRadius: "12px",
+              cursor: "pointer",
+              boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+              WebkitTapHighlightColor: "transparent",
+              touchAction: "manipulation",
+              userSelect: "none",
+            }}
           >
-            <Volume2 className="w-24 h-24 mx-auto text-primary" />
-          </motion.div>
-          <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-primary via-secondary to-accent mb-4">
-            Enable Audio
-          </h1>
-          <p className="text-lg text-foreground/80 mb-8">Tap the button below to enable audio for the spelling game</p>
-          <Button
-            onClick={unlockAudio}
-            size="lg"
-            style={{ pointerEvents: "auto", touchAction: "manipulation" }}
-            className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground font-bold text-xl px-8 py-6 shadow-lg cursor-pointer"
-          >
-            <Volume2 className="w-6 h-6 mr-2" />
             Start Game
-          </Button>
-        </motion.div>
+          </button>
+        </div>
       </div>
     )
   }
