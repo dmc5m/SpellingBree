@@ -160,8 +160,7 @@ h3,
 h4,
 h5,
 h6,
-span,
-div:not([role="button"]) {
+span {
   -webkit-user-select: none;
   user-select: none;
 }
