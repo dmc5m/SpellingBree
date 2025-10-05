@@ -31,7 +31,9 @@ export default function SpellingBee() {
   const [feedback, setFeedback] = useState("")
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
 
-  const rate = -15
+const rate = -15
+// Shared AudioContext for Safari to reuse unlocked state
+let sharedAudioContext: AudioContext | null = null
 
   useEffect(() => {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
@@ -68,6 +70,7 @@ export default function SpellingBee() {
   function unlockAudio() {
     // Kid-friendly: optional short gentle chime or silence
     const context = new (window.AudioContext || (window as any).webkitAudioContext)()
+    sharedAudioContext = context;
     try {
       const oscillator = context.createOscillator()
       const gainNode = context.createGain()
@@ -133,13 +136,29 @@ export default function SpellingBee() {
         return
       }
       const blob = await res.blob()
-      const audio = new Audio(URL.createObjectURL(blob))
-      audio.play()
-      audio.onended = () => {
-        setIsLoading(false)
-      }
-      audio.onerror = () => {
-        setIsLoading(false)
+      const blobUrl = URL.createObjectURL(blob)
+
+      if (sharedAudioContext) {
+        try {
+          const response = await fetch(blobUrl)
+          const arrayBuffer = await response.arrayBuffer()
+          const buffer = await sharedAudioContext.decodeAudioData(arrayBuffer)
+          const source = sharedAudioContext.createBufferSource()
+          source.buffer = buffer
+          source.connect(sharedAudioContext.destination)
+          source.start(0)
+          source.onended = () => {
+            setIsLoading(false)
+          }
+        } catch (err) {
+          console.error("Error playing through sharedAudioContext:", err)
+          setIsLoading(false)
+        }
+      } else {
+        const audio = new Audio(blobUrl)
+        audio.play()
+        audio.onended = () => setIsLoading(false)
+        audio.onerror = () => setIsLoading(false)
       }
     } catch (err) {
       console.error("Error:", err)
