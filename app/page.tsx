@@ -178,7 +178,7 @@ export default function SpellingBee() {
             animate={{ scale: [1, 1.05, 1] }}
             transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY }}
           >
-            Spelling Bee
+            Spelling Bee!!!!!
           </motion.h1>
           <motion.div
             animate={{ rotate: 360 }}
