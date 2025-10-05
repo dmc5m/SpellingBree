@@ -241,6 +241,24 @@ export default function SpellingBee() {
             Start Game
           </Button>
         </motion.div>
+        <button
+          onClick={handleTestClick}
+          style={{
+            position: "fixed",
+            bottom: "1rem",
+            right: "1rem",
+            zIndex: 999999,
+            backgroundColor: testColor ? "limegreen" : "deeppink",
+            color: "white",
+            padding: "1rem",
+            borderRadius: "0.5rem",
+            border: "none",
+            fontSize: "1rem",
+            touchAction: "manipulation",
+          }}
+        >
+          Test Tap
+        </button>
       </div>
     )
   }
