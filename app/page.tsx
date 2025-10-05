@@ -208,7 +208,7 @@ export default function SpellingBee() {
 
   if (needsAudioUnlock) {
     return (
-      <div className="h-screen bg-gradient-to-br from-primary/20 via-secondary/20 to-accent/20 flex items-center justify-center p-4">
+      <div className="relative z-50 h-screen bg-gradient-to-br from-primary/20 via-secondary/20 to-accent/20 flex items-center justify-center p-4">
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -229,7 +229,8 @@ export default function SpellingBee() {
           <Button
             onClick={unlockAudio}
             size="lg"
-            className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground font-bold text-xl px-8 py-6 shadow-lg"
+            style={{ pointerEvents: "auto", touchAction: "manipulation" }}
+            className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground font-bold text-xl px-8 py-6 shadow-lg cursor-pointer"
           >
             <Volume2 className="w-6 h-6 mr-2" />
             Start Game
@@ -249,7 +250,7 @@ export default function SpellingBee() {
           className="text-center"
         >
           <motion.h1
-            className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-primary via-secondary to-accent mb-4"
+            className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-primary via-secondary to-accent mb-4 text-balance"
             animate={{ scale: [1, 1.05, 1] }}
             transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY }}
           >

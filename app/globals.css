@@ -139,37 +139,47 @@
   }
 }
 
-/* Fixed iOS scrolling while allowing button interactions */
+/* Simplified iOS scrolling fix - removed position: fixed that was blocking touches */
 html,
 body {
   height: 100%;
   height: 100dvh;
-  overflow: hidden;
-  position: fixed;
   width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
 }
 
-/* Removed user-select: none that was blocking button taps on iOS */
-/* Only prevent text selection on non-interactive elements */
-body * {
+/* Only prevent text selection on text elements, not all elements */
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+span,
+div:not([role="button"]) {
   -webkit-user-select: none;
   user-select: none;
 }
 
-/* Allow interaction on buttons and interactive elements */
+/* Ensure all interactive elements work properly on iOS */
 button,
 a,
 input,
 textarea,
 select,
 [role="button"],
-[tabindex] {
+[tabindex],
+.button {
   -webkit-user-select: none;
   user-select: none;
-  pointer-events: auto;
-  touch-action: manipulation; /* Improves tap responsiveness on iOS */
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 /* Allow text selection in input fields */
@@ -179,7 +189,7 @@ textarea {
   user-select: text;
 }
 
-/* Prevent iOS Safari address bar from showing/hiding on scroll */
+/* Ensure main content area allows scrolling but prevents bounce */
 #__next,
 main {
   height: 100%;
