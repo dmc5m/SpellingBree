@@ -38,7 +38,8 @@ export default function SpellingBee() {
     const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
     const audioUnlocked = localStorage.getItem("audioUnlocked")
 
-    if ((isIOS || isSafari) && !audioUnlocked) {
+    if (isIOS || isSafari) {
+      // Always re-run the audio unlock on iOS and Safari, regardless of stored flag
       setNeedsAudioUnlock(true)
       setShowSplash(false)
       return
