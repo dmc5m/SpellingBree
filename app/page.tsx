@@ -19,6 +19,7 @@ const levels = {
 const API_BASE = "https://gratitude-web-app4-gsfxc4cpfugcggbt.westus-01.azurewebsites.net"
 
 export default function SpellingBee() {
+  const [needsAudioUnlock, setNeedsAudioUnlock] = useState(false)
   const [showSplash, setShowSplash] = useState(true)
   const [currentLevel, setCurrentLevel] = useState(1)
   const [correctCount, setCorrectCount] = useState(0)
@@ -33,6 +34,16 @@ export default function SpellingBee() {
   const rate = -15
 
   useEffect(() => {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+    const audioUnlocked = localStorage.getItem("audioUnlocked")
+
+    if ((isIOS || isSafari) && !audioUnlocked) {
+      setNeedsAudioUnlock(true)
+      setShowSplash(false)
+      return
+    }
+
     const savedLevel = localStorage.getItem("level")
     const savedCorrect = localStorage.getItem("correctCount")
     const levelToUse = savedLevel ? Number.parseInt(savedLevel) : 1
@@ -52,6 +63,37 @@ export default function SpellingBee() {
     }
     init()
   }, [])
+
+  async function unlockAudio() {
+    try {
+      const audio = new Audio()
+      audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA"
+      await audio.play()
+
+      localStorage.setItem("audioUnlocked", "true")
+      setNeedsAudioUnlock(false)
+      setShowSplash(true)
+
+      const savedLevel = localStorage.getItem("level")
+      const savedCorrect = localStorage.getItem("correctCount")
+      const levelToUse = savedLevel ? Number.parseInt(savedLevel) : 1
+      const correctToUse = savedCorrect ? Number.parseInt(savedCorrect) : 0
+
+      if (savedLevel) setCurrentLevel(levelToUse)
+      if (savedCorrect) setCorrectCount(correctToUse)
+
+      const init = async () => {
+        await wakeApi()
+        setTimeout(() => {
+          setShowSplash(false)
+          pickWord(levelToUse)
+        }, 3000)
+      }
+      init()
+    } catch (err) {
+      console.error("Error unlocking audio:", err)
+    }
+  }
 
   async function wakeApi() {
     try {
@@ -162,6 +204,39 @@ export default function SpellingBee() {
         setIsLoading(false)
       }
     }
+  }
+
+  if (needsAudioUnlock) {
+    return (
+      <div className="h-screen bg-gradient-to-br from-primary/20 via-secondary/20 to-accent/20 flex items-center justify-center p-4">
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.5 }}
+          className="text-center max-w-md"
+        >
+          <motion.div
+            animate={{ scale: [1, 1.1, 1] }}
+            transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY }}
+            className="mb-8"
+          >
+            <Volume2 className="w-24 h-24 mx-auto text-primary" />
+          </motion.div>
+          <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-primary via-secondary to-accent mb-4">
+            Enable Audio
+          </h1>
+          <p className="text-lg text-foreground/80 mb-8">Tap the button below to enable audio for the spelling game</p>
+          <Button
+            onClick={unlockAudio}
+            size="lg"
+            className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground font-bold text-xl px-8 py-6 shadow-lg"
+          >
+            <Volume2 className="w-6 h-6 mr-2" />
+            Start Game
+          </Button>
+        </motion.div>
+      </div>
+    )
   }
 
   if (showSplash) {
