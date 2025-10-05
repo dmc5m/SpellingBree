@@ -69,34 +69,38 @@ export default function SpellingBee() {
     init()
   }, [])
 
-  async function unlockAudio() {
-    try {
-      const audio = new Audio()
-      audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA"
-      await audio.play()
+  function unlockAudio() {
+    const audio = new Audio()
+    audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA"
+    const playPromise = audio.play()
 
-      localStorage.setItem("audioUnlocked", "true")
-      setNeedsAudioUnlock(false)
-      setShowSplash(true)
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => {
+          localStorage.setItem("audioUnlocked", "true")
+          setNeedsAudioUnlock(false)
+          setShowSplash(true)
 
-      const savedLevel = localStorage.getItem("level")
-      const savedCorrect = localStorage.getItem("correctCount")
-      const levelToUse = savedLevel ? Number.parseInt(savedLevel) : 1
-      const correctToUse = savedCorrect ? Number.parseInt(savedCorrect) : 0
+          const savedLevel = localStorage.getItem("level")
+          const savedCorrect = localStorage.getItem("correctCount")
+          const levelToUse = savedLevel ? Number.parseInt(savedLevel) : 1
+          const correctToUse = savedCorrect ? Number.parseInt(savedCorrect) : 0
 
-      if (savedLevel) setCurrentLevel(levelToUse)
-      if (savedCorrect) setCorrectCount(correctToUse)
+          if (savedLevel) setCurrentLevel(levelToUse)
+          if (savedCorrect) setCorrectCount(correctToUse)
 
-      const init = async () => {
-        await wakeApi()
-        setTimeout(() => {
-          setShowSplash(false)
-          pickWord(levelToUse)
-        }, 3000)
-      }
-      init()
-    } catch (err) {
-      console.error("Error unlocking audio:", err)
+          const init = async () => {
+            await wakeApi()
+            setTimeout(() => {
+              setShowSplash(false)
+              pickWord(levelToUse)
+            }, 3000)
+          }
+          init()
+        })
+        .catch((err) => {
+          console.error("Audio unlock failed:", err)
+        })
     }
   }
 
