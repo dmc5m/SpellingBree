@@ -30,11 +30,6 @@ export default function SpellingBee() {
   const [showConfetti, setShowConfetti] = useState(false)
   const [feedback, setFeedback] = useState("")
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
-  const [testColor, setTestColor] = useState(false)
-  const handleTestClick = () => {
-    setTestColor(!testColor)
-    console.log("✅ Test button tapped!")
-  }
 
   const rate = -15
 
@@ -70,22 +65,22 @@ export default function SpellingBee() {
   }, [])
 
   function unlockAudio() {
-    // Short "ding" sound (440Hz sine wave for ~0.2s)
+    // Kid-friendly: optional short gentle chime or silence
     const context = new (window.AudioContext || (window as any).webkitAudioContext)()
-    const oscillator = context.createOscillator()
-    const gainNode = context.createGain()
+    try {
+      const oscillator = context.createOscillator()
+      const gainNode = context.createGain()
+      oscillator.type = "sine"
+      oscillator.frequency.setValueAtTime(660, context.currentTime) // softer tone
+      gainNode.gain.setValueAtTime(0.05, context.currentTime) // very quiet
+      oscillator.connect(gainNode)
+      gainNode.connect(context.destination)
+      oscillator.start()
+      oscillator.stop(context.currentTime + 0.1)
+    } catch {
+      console.warn("Skipping tone, silent unlock")
+    }
 
-    oscillator.type = "sine"
-    oscillator.frequency.setValueAtTime(440, context.currentTime) // A4 tone
-    gainNode.gain.setValueAtTime(0.2, context.currentTime) // low volume
-
-    oscillator.connect(gainNode)
-    gainNode.connect(context.destination)
-
-    oscillator.start()
-    oscillator.stop(context.currentTime + 0.2)
-
-    // Try to resume the AudioContext if it's suspended
     if (context.state === "suspended") {
       context.resume().catch((err) => {
         console.error("AudioContext resume failed:", err)
@@ -258,24 +253,6 @@ export default function SpellingBee() {
             Start Game
           </Button>
         </motion.div>
-        <button
-          onClick={handleTestClick}
-          style={{
-            position: "fixed",
-            bottom: "1rem",
-            right: "1rem",
-            zIndex: 999999,
-            backgroundColor: testColor ? "limegreen" : "deeppink",
-            color: "white",
-            padding: "1rem",
-            borderRadius: "0.5rem",
-            border: "none",
-            fontSize: "1rem",
-            touchAction: "manipulation",
-          }}
-        >
-          Test Tap
-        </button>
       </div>
     )
   }
@@ -463,24 +440,6 @@ export default function SpellingBee() {
           <p className="text-sm font-medium">Keep practicing to level up!</p>
         </motion.div>
       </div>
-      <button
-        onClick={handleTestClick}
-        style={{
-          position: "fixed",
-          bottom: "1rem",
-          right: "1rem",
-          zIndex: 99999,
-          backgroundColor: testColor ? "limegreen" : "deeppink",
-          color: "white",
-          padding: "1rem",
-          borderRadius: "0.5rem",
-          border: "none",
-          fontSize: "1rem",
-          touchAction: "manipulation",
-        }}
-      >
-        Test Tap
-      </button>
     </main>
   )
 }
