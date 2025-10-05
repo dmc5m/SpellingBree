@@ -70,38 +70,51 @@ export default function SpellingBee() {
   }, [])
 
   function unlockAudio() {
-    const audio = new Audio()
-    audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA"
-    const playPromise = audio.play()
+    // Short "ding" sound (440Hz sine wave for ~0.2s)
+    const context = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const oscillator = context.createOscillator()
+    const gainNode = context.createGain()
 
-    if (playPromise !== undefined) {
-      playPromise
-        .then(() => {
-          localStorage.setItem("audioUnlocked", "true")
-          setNeedsAudioUnlock(false)
-          setShowSplash(true)
+    oscillator.type = "sine"
+    oscillator.frequency.setValueAtTime(440, context.currentTime) // A4 tone
+    gainNode.gain.setValueAtTime(0.2, context.currentTime) // low volume
 
-          const savedLevel = localStorage.getItem("level")
-          const savedCorrect = localStorage.getItem("correctCount")
-          const levelToUse = savedLevel ? Number.parseInt(savedLevel) : 1
-          const correctToUse = savedCorrect ? Number.parseInt(savedCorrect) : 0
+    oscillator.connect(gainNode)
+    gainNode.connect(context.destination)
 
-          if (savedLevel) setCurrentLevel(levelToUse)
-          if (savedCorrect) setCorrectCount(correctToUse)
+    oscillator.start()
+    oscillator.stop(context.currentTime + 0.2)
 
-          const init = async () => {
-            await wakeApi()
-            setTimeout(() => {
-              setShowSplash(false)
-              pickWord(levelToUse)
-            }, 3000)
-          }
-          init()
-        })
-        .catch((err) => {
-          console.error("Audio unlock failed:", err)
-        })
+    // Try to resume the AudioContext if it's suspended
+    if (context.state === "suspended") {
+      context.resume().catch((err) => {
+        console.error("AudioContext resume failed:", err)
+      })
     }
+
+    // Proceed regardless of playback success
+    localStorage.setItem("audioUnlocked", "true")
+    setNeedsAudioUnlock(false)
+    setShowSplash(true)
+
+    const savedLevel = localStorage.getItem("level")
+    const savedCorrect = localStorage.getItem("correctCount")
+    const levelToUse = savedLevel ? Number.parseInt(savedLevel) : 1
+    const correctToUse = savedCorrect ? Number.parseInt(savedCorrect) : 0
+
+    if (savedLevel) setCurrentLevel(levelToUse)
+    if (savedCorrect) setCorrectCount(correctToUse)
+
+    console.log("✅ Audio unlocked or bypassed — initializing game...")
+
+    const init = async () => {
+      await wakeApi()
+      setTimeout(() => {
+        setShowSplash(false)
+        pickWord(levelToUse)
+      }, 3000)
+    }
+    init()
   }
 
   async function wakeApi() {
