@@ -166,7 +166,7 @@ export default function SpellingBee() {
 
   if (showSplash) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-primary/20 via-secondary/20 to-accent/20 flex items-center justify-center p-4">
+      <div className="h-screen bg-gradient-to-br from-primary/20 via-secondary/20 to-accent/20 flex items-center justify-center p-4">
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -193,7 +193,7 @@ export default function SpellingBee() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4 md:p-8">
+    <main className="h-screen overflow-y-auto bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4 md:p-8">
       {showConfetti && <Confetti />}
 
       <div className="max-w-4xl mx-auto">
@@ -347,6 +347,6 @@ export default function SpellingBee() {
           <p className="text-sm font-medium">Keep practicing to level up!</p>
         </motion.div>
       </div>
-    </div>
+    </main>
   )
 }

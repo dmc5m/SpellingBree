@@ -142,9 +142,35 @@
 html,
 body {
   height: 100%;
+  height: 100dvh; /* Use dynamic viewport height for mobile browsers */
   overflow: hidden;
   position: fixed;
   width: 100%;
   overscroll-behavior: none; /* Prevent rubber-band bounce on iOS */
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-y; /* Allow vertical scrolling but prevent pull-to-refresh */
+}
+
+/* Prevent iOS Safari from bouncing */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Allow text selection in input fields */
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Prevent iOS Safari address bar from showing/hiding on scroll */
+#__next,
+main {
+  height: 100%;
+  height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
 }
