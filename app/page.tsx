@@ -30,6 +30,11 @@ export default function SpellingBee() {
   const [showConfetti, setShowConfetti] = useState(false)
   const [feedback, setFeedback] = useState("")
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
+  const [testColor, setTestColor] = useState(false)
+  const handleTestClick = () => {
+    setTestColor(!testColor)
+    console.log("✅ Test button tapped!")
+  }
 
   const rate = -15
 
@@ -423,6 +428,24 @@ export default function SpellingBee() {
           <p className="text-sm font-medium">Keep practicing to level up!</p>
         </motion.div>
       </div>
+      <button
+        onClick={handleTestClick}
+        style={{
+          position: "fixed",
+          bottom: "1rem",
+          right: "1rem",
+          zIndex: 99999,
+          backgroundColor: testColor ? "limegreen" : "deeppink",
+          color: "white",
+          padding: "1rem",
+          borderRadius: "0.5rem",
+          border: "none",
+          fontSize: "1rem",
+          touchAction: "manipulation",
+        }}
+      >
+        Test Tap
+      </button>
     </main>
   )
 }
