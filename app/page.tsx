@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Sparkles, Volume2, SkipForward, Star, Trophy, Zap, Loader2 } from "lucide-react"
+import { Sparkles, Volume2, SkipForward, Star, Trophy, Zap, Loader2, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
@@ -31,9 +31,9 @@ export default function SpellingBee() {
   const [feedback, setFeedback] = useState("")
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
 
-const rate = -15
-// Shared AudioContext for Safari to reuse unlocked state
-let sharedAudioContext: AudioContext | null = null
+  const rate = -15
+  // Shared AudioContext for Safari to reuse unlocked state
+  let sharedAudioContext: AudioContext | null = null
 
   useEffect(() => {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
@@ -70,7 +70,7 @@ let sharedAudioContext: AudioContext | null = null
   function unlockAudio() {
     // Kid-friendly: optional short gentle chime or silence
     const context = new (window.AudioContext || (window as any).webkitAudioContext)()
-    sharedAudioContext = context;
+    sharedAudioContext = context
     try {
       const oscillator = context.createOscillator()
       const gainNode = context.createGain()
@@ -243,6 +243,17 @@ let sharedAudioContext: AudioContext | null = null
     }
   }
 
+  function resetLevel() {
+    if (confirm("Are you sure you want to reset your progress? This will take you back to Level 1.")) {
+      localStorage.removeItem("level")
+      localStorage.removeItem("correctCount")
+      setCurrentLevel(1)
+      setCorrectCount(0)
+      setAttempts(0)
+      pickWord(1)
+    }
+  }
+
   if (needsAudioUnlock) {
     return (
       <div className="relative z-50 h-screen bg-gradient-to-br from-primary/20 via-secondary/20 to-accent/20 flex items-center justify-center p-4">
@@ -279,7 +290,7 @@ let sharedAudioContext: AudioContext | null = null
 
   if (showSplash) {
     return (
-      <div className="h-screen bg-gradient-to-br from-primary/20 via-secondary/20 to-accent/20 flex items-center justify-center p-4">
+      <div className="h-screen bg-gradient-to-br from-primary/20 via-background to-secondary/20 flex items-center justify-center p-4">
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -315,6 +326,10 @@ let sharedAudioContext: AudioContext | null = null
           <h1 className="text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-primary via-secondary to-accent mb-4 text-balance">
             Spelling Bee
           </h1>
+          <Button onClick={resetLevel} variant="outline" size="sm" className="font-semibold border-2 bg-transparent">
+            <RotateCcw className="w-4 h-4 mr-2" />
+            Reset Level
+          </Button>
         </motion.div>
 
         {/* Stats Bar */}
