@@ -11,9 +11,9 @@ import { Card } from "@/components/ui/card"
 import Confetti from "@/components/confetti"
 
 const levels = {
-  1: ["cat", "dog", "sun", "hat"],
-  2: ["apple", "green", "chair", "cloud"],
-  3: ["simple", "castle", "wonder", "puzzle"],
+  1: ["verb", "fern", "stern", "perch", "never", "after"],
+  2: ["her", "perk", "nerve", "serve", "swerve"],
+  3: ["herself", "nevermind", "wonder", "another"],
 }
 
 const API_BASE = "https://gratitude-web-app4-gsfxc4cpfugcggbt.westus-01.azurewebsites.net"
@@ -403,6 +403,10 @@ let sharedAudioContext: AudioContext | null = null
                   placeholder="Type your answer here..."
                   className="text-2xl md:text-3xl h-16 md:h-20 text-center font-bold border-4 focus-visible:ring-4 focus-visible:ring-primary/50 disabled:opacity-50"
                   autoFocus
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
                 />
               </div>
 
