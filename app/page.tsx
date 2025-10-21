@@ -11,9 +11,10 @@ import { Card } from "@/components/ui/card"
 import Confetti from "@/components/confetti"
 
 const levels = {
-  1: ["verb", "fern", "stern", "perch", "never", "after"],
-  2: ["her", "perk", "nerve", "serve", "swerve"],
-  3: ["herself", "nevermind", "wonder", "another"],
+  1: ["thirsty", "work", "burn", "nurse", "river", "paper"],
+  2: ["worm", "birth", "nerve", "serve", "swerve"],
+  3: ["worst", "world", "worth", "thirsty"],
+  4: ["other", "mother", "brother", "another"],
 }
 
 const API_BASE = "https://gratitude-web-app4-gsfxc4cpfugcggbt.westus-01.azurewebsites.net"
