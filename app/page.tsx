@@ -11,9 +11,9 @@ import { Card } from "@/components/ui/card"
 import Confetti from "@/components/confetti"
 
 const levels = {
-  1: ["thirsty", "work", "burn", "nurse", "river", "paper"],
-  2: ["worm", "birth", "nerve", "serve", "swerve"],
-  3: ["worst", "world", "worth", "thirsty"],
+  1: ["store", "story", "thirsty", "fern", "verb", "paper"],
+  2: ["worm", "birthday", "order", "serve", "swerve"],
+  3: ["worst", "world", "worthy", "better"],
   4: ["other", "mother", "brother", "another"],
 }
 
