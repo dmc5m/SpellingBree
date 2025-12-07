@@ -32,7 +32,7 @@ export default function SpellingBee() {
   const [feedback, setFeedback] = useState("")
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
 
-  const rate = -15
+  const rate = -30
   // Shared AudioContext for Safari to reuse unlocked state
   let sharedAudioContext: AudioContext | null = null
 
