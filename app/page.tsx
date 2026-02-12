@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Sparkles, Volume2, SkipForward, Star, Trophy, Zap, Loader2, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -33,8 +33,10 @@ export default function SpellingBee() {
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
 
   const rate = -30
-  // Shared AudioContext for Safari to reuse unlocked state
-  let sharedAudioContext: AudioContext | null = null
+  // Shared AudioContext for Safari to reuse unlocked state (useRef survives re-renders)
+  const sharedAudioContextRef = useRef<AudioContext | null>(null)
+  // Cache TTS audio to avoid redundant API calls for repeated phrases
+  const audioCacheRef = useRef<Map<string, ArrayBuffer>>(new Map())
 
   useEffect(() => {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
@@ -56,22 +58,26 @@ export default function SpellingBee() {
     if (savedLevel) setCurrentLevel(levelToUse)
     if (savedCorrect) setCorrectCount(correctToUse)
 
-    console.log("[v0] Initializing with level:", levelToUse, "correct:", correctToUse)
-
     const init = async () => {
       await wakeApi()
-      setTimeout(() => {
-        setShowSplash(false)
-        pickWord(levelToUse)
-      }, 3000)
+      setShowSplash(false)
+      pickWord(levelToUse)
     }
     init()
+  }, [])
+
+  // Keep the TTS API warm to avoid cold-start delays
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetch(`${API_BASE}/health`).catch(() => {})
+    }, 5 * 60 * 1000)
+    return () => clearInterval(interval)
   }, [])
 
   function unlockAudio() {
     // Kid-friendly: optional short gentle chime or silence
     const context = new (window.AudioContext || (window as any).webkitAudioContext)()
-    sharedAudioContext = context
+    sharedAudioContextRef.current = context
     try {
       const oscillator = context.createOscillator()
       const gainNode = context.createGain()
@@ -105,14 +111,10 @@ export default function SpellingBee() {
     if (savedLevel) setCurrentLevel(levelToUse)
     if (savedCorrect) setCorrectCount(correctToUse)
 
-    console.log("✅ Audio unlocked or bypassed — initializing game...")
-
     const init = async () => {
       await wakeApi()
-      setTimeout(() => {
-        setShowSplash(false)
-        pickWord(levelToUse)
-      }, 3000)
+      setShowSplash(false)
+      pickWord(levelToUse)
     }
     init()
   }
@@ -125,59 +127,83 @@ export default function SpellingBee() {
     }
   }
 
+  async function prefetchAudio(text: string) {
+    if (audioCacheRef.current.has(text)) return
+    const params = new URLSearchParams({ text, rate: rate.toString() })
+    try {
+      const res = await fetch(`${API_BASE}/api/tts?${params.toString()}`)
+      if (res.ok) {
+        const blob = await res.blob()
+        audioCacheRef.current.set(text, await blob.arrayBuffer())
+      }
+    } catch {}
+  }
+
   async function speak(text: string) {
     if (isLoading) return
     setIsLoading(true)
-    const params = new URLSearchParams({ text, rate: rate.toString() })
-    try {
-      const res = await fetch(`${API_BASE}/api/tts?${params.toString()}`, { method: "GET" })
-      if (!res.ok) {
-        console.error("TTS error:", await res.text())
+
+    let arrayBuffer = audioCacheRef.current.get(text)
+
+    if (!arrayBuffer) {
+      const params = new URLSearchParams({ text, rate: rate.toString() })
+      try {
+        const res = await fetch(`${API_BASE}/api/tts?${params.toString()}`, { method: "GET" })
+        if (!res.ok) {
+          console.error("TTS error:", await res.text())
+          setIsLoading(false)
+          return
+        }
+        const blob = await res.blob()
+        arrayBuffer = await blob.arrayBuffer()
+        audioCacheRef.current.set(text, arrayBuffer)
+      } catch (err) {
+        console.error("Error:", err)
         setIsLoading(false)
         return
       }
-      const blob = await res.blob()
-      const blobUrl = URL.createObjectURL(blob)
+    }
 
-      if (sharedAudioContext) {
-        try {
-          const response = await fetch(blobUrl)
-          const arrayBuffer = await response.arrayBuffer()
-          const buffer = await sharedAudioContext.decodeAudioData(arrayBuffer)
-          const source = sharedAudioContext.createBufferSource()
-          source.buffer = buffer
-          source.connect(sharedAudioContext.destination)
-          source.start(0)
-          source.onended = () => {
-            setIsLoading(false)
-          }
-        } catch (err) {
-          console.error("Error playing through sharedAudioContext:", err)
-          setIsLoading(false)
-        }
-      } else {
-        const audio = new Audio(blobUrl)
-        audio.play()
-        audio.onended = () => setIsLoading(false)
-        audio.onerror = () => setIsLoading(false)
+    const audioContext = sharedAudioContextRef.current
+    if (audioContext) {
+      try {
+        const buffer = await audioContext.decodeAudioData(arrayBuffer.slice(0))
+        const source = audioContext.createBufferSource()
+        source.buffer = buffer
+        source.connect(audioContext.destination)
+        source.start(0)
+        source.onended = () => setIsLoading(false)
+      } catch (err) {
+        console.error("Error playing through AudioContext:", err)
+        setIsLoading(false)
       }
-    } catch (err) {
-      console.error("Error:", err)
-      setIsLoading(false)
+    } else {
+      const blob = new Blob([arrayBuffer])
+      const blobUrl = URL.createObjectURL(blob)
+      const audio = new Audio(blobUrl)
+      audio.play()
+      audio.onended = () => {
+        URL.revokeObjectURL(blobUrl)
+        setIsLoading(false)
+      }
+      audio.onerror = () => {
+        URL.revokeObjectURL(blobUrl)
+        setIsLoading(false)
+      }
     }
   }
 
   function pickWord(level?: number) {
     const levelToUse = level ?? currentLevel
-    console.log("[v0] Picking word for level:", levelToUse)
     const words = levels[levelToUse as keyof typeof levels]
     const word = words[Math.floor(Math.random() * words.length)]
-    console.log("[v0] Selected word:", word, "from level", levelToUse)
     setCurrentWord(word)
     setAnswer("")
     setIsCorrect(null)
     setFeedback("")
     speak(`Level ${levelToUse}. Please spell the word... ${word}`)
+    // Prefetch standalone word audio so "Say It Again" is instant
+    prefetchAudio(word)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -188,8 +214,6 @@ export default function SpellingBee() {
     setAttempts(newAttempts)
     const userAnswer = answer.trim().toLowerCase()
 
-    console.log("[v0] Checking answer:", userAnswer, "against:", currentWord)
-
     if (userAnswer === currentWord.toLowerCase()) {
       const newCorrect = correctCount + 1
       setCorrectCount(newCorrect)
@@ -198,16 +222,13 @@ export default function SpellingBee() {
       localStorage.setItem("correctCount", newCorrect.toString())
       localStorage.setItem("level", currentLevel.toString())
 
-      console.log("[v0] Correct! New count:", newCorrect, "Current level:", currentLevel)
-
-      await speak(`Great job! You spelled the word correctly.`)
-
       if (newCorrect % 5 === 0 && currentLevel < Object.keys(levels).length) {
         const newLevel = currentLevel + 1
-        console.log("[v0] Leveling up to:", newLevel)
         setCurrentLevel(newLevel)
         localStorage.setItem("level", newLevel.toString())
-        await speak(`Excellent! Moving on to level ${newLevel}.`)
+        await speak(`Great job! You spelled it correctly. Moving on to level ${newLevel}.`)
+      } else {
+        await speak(`Great job! You spelled the word correctly.`)
       }
 
       setTimeout(() => {
@@ -226,12 +247,15 @@ export default function SpellingBee() {
         })
         if (res.ok) {
           const blob = await res.blob()
-          const audio = new Audio(URL.createObjectURL(blob))
+          const blobUrl = URL.createObjectURL(blob)
+          const audio = new Audio(blobUrl)
           audio.play()
           audio.onended = () => {
+            URL.revokeObjectURL(blobUrl)
             setIsLoading(false)
           }
           audio.onerror = () => {
+            URL.revokeObjectURL(blobUrl)
             setIsLoading(false)
           }
         } else {
