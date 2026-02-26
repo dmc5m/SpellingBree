@@ -1,7 +1,7 @@
 ---
 title: "feat: Audio Architecture Overhaul"
 type: feat
-status: active
+status: completed
 date: 2026-02-26
 ---
 
@@ -166,15 +166,15 @@ AZURE_OPENAI_DEPLOYMENT=...     # same as AZURE_OPENAI_DEPLOYMENT_NAME_5 in Flas
 
 Create a one-time Node.js script that calls Azure Speech REST API to generate all MP3 files and saves them to `public/audio/`.
 
-- [ ] Create `scripts/generate-audio.ts` — reads words from `lib/words.ts`, generates all word + phrase + buffer MP3s via Azure Speech REST API
-- [ ] Run the script, commit generated MP3 files to `public/audio/`
-- [ ] Verify files play correctly
+- [x] Create `scripts/generate-audio.mjs` — reads words from `lib/words.ts`, generates all word + phrase + buffer MP3s via Azure Speech REST API
+- [x] Run the script, commit generated MP3 files to `public/audio/`
+- [x] Verify files play correctly
 
 #### Phase 2: Vercel API Route for Hints
 
-- [ ] Install `openai` npm package (`pnpm add openai`)
-- [ ] Create `app/api/hint/route.ts` — POST endpoint that accepts `{misspelling, correct}`, calls Azure OpenAI for teacher feedback, calls Azure Speech REST API for TTS, returns MP3 blob
-- [ ] XML-escape GPT output before SSML injection
+- [x] Install `openai` npm package (`pnpm add openai`)
+- [x] Create `app/api/hint/route.ts` — POST endpoint that accepts `{misspelling, correct}`, calls Azure OpenAI for teacher feedback, calls Azure Speech REST API for TTS, returns MP3 blob
+- [x] XML-escape GPT output before SSML injection
 - [ ] Add env vars to Vercel project settings
 - [ ] Test the endpoint returns valid MP3 audio
 
@@ -182,33 +182,33 @@ Create a one-time Node.js script that calls Azure Speech REST API to generate al
 
 Replace the current Flask-dependent audio hook with static file loading and the hint buffer chain.
 
-- [ ] Replace `speak()` — load from `/audio/words/{word}.mp3` and `/audio/phrases/{key}.mp3` instead of calling Flask TTS API
-- [ ] Add `playStatic(path)` helper — fetch static MP3, decode, play through AudioContext, return Promise
-- [ ] Cache decoded AudioBuffers for static files (same Map pattern, keyed by path)
-- [ ] Preload buffer chain MP3s on mount (small files, always needed)
-- [ ] Implement `speakHintWithBufferChain(misspelling, correct)` — fires hint fetch, runs buffer chain, checks Promise at each wait point
-- [ ] Add `isInHintChain` ref — locks UI during entire chain including 1s pauses
-- [ ] Remove Flask-related code: `fetchAudioBuffer()`, keepalive ping, `API_BASE` usage, `TTS_TIMEOUT_MS`
-- [ ] Keep iOS AudioContext unlock, visibilitychange resume, safety timeouts — those are still needed
+- [x] Replace `speak()` — load from `/audio/words/{word}.mp3` and `/audio/phrases/{key}.mp3` instead of calling Flask TTS API
+- [x] Add `playStatic(path)` helper — fetch static MP3, decode, play through AudioContext, return Promise
+- [x] Cache decoded AudioBuffers for static files (same Map pattern, keyed by path)
+- [x] Preload buffer chain MP3s on mount (small files, always needed)
+- [x] Implement `speakHintWithBufferChain(misspelling, correct)` — fires hint fetch, runs buffer chain, checks Promise at each wait point
+- [x] Add `isInHintChain` ref — locks UI during entire chain including 1s pauses
+- [x] Remove Flask-related code: `fetchAudioBuffer()`, keepalive ping, `API_BASE` usage, `TTS_TIMEOUT_MS`
+- [x] Keep iOS AudioContext unlock, visibilitychange resume, safety timeouts — those are still needed
 
 #### Phase 4: Refactor `use-spelling-game.ts`
 
 Update game logic for static audio and the new forced-typing sub-state.
 
-- [ ] Update `startGame()` — play static `level-N.mp3` + `spell-the-word.mp3` + `{word}.mp3` instead of speaking a concatenated sentence
-- [ ] Update `checkAnswer()` correct path — play static `correct.mp3` or `correct-level-up.mp3`
-- [ ] Update `checkAnswer()` incorrect path — call `speakHintWithBufferChain()` instead of `speakHint()`
-- [ ] Add forced-typing sub-state: new `showCorrectWord` state, UI shows word, requires correct typing before advancing
-- [ ] Update `sayItAgain()` — play static `{word}.mp3`
-- [ ] Update `skip()` — cancel any in-flight hint chain
-- [ ] Remove `API_BASE` health ping from `startGame()`
+- [x] Update `startGame()` — play static `level-N.mp3` + `spell-the-word.mp3` + `{word}.mp3` instead of speaking a concatenated sentence
+- [x] Update `checkAnswer()` correct path — play static `correct.mp3` or `correct-level-up.mp3`
+- [x] Update `checkAnswer()` incorrect path — call `speakHintWithBufferChain()` instead of `speakHint()`
+- [x] Add forced-typing sub-state: new `showCorrectWord` state, UI shows word, requires correct typing before advancing
+- [x] Update `sayItAgain()` — play static `{word}.mp3`
+- [x] Update `skip()` — cancel any in-flight hint chain
+- [x] Remove `API_BASE` health ping from `startGame()`
 
 #### Phase 5: Update Config and Cleanup
 
-- [ ] Update `lib/config.ts` — remove `API_BASE`, `TTS_TIMEOUT_MS`, `KEEPALIVE_INTERVAL_MS`. Keep `TTS_RATE`, `CORRECT_TO_LEVEL_UP`. Add `HINT_TIMEOUT_MS = 25000`
-- [ ] Update `components/game-board.tsx` — add forced-typing UI (show correct word, different submit behavior), show "Bree is thinking..." during hint chain instead of generic spinner
-- [ ] Update `CLAUDE.md` — reflect new architecture (no Flask dependency, static audio, Vercel API route)
-- [ ] Verify build passes
+- [x] Update `lib/config.ts` — remove `API_BASE`, `TTS_TIMEOUT_MS`, `KEEPALIVE_INTERVAL_MS`. Keep `TTS_RATE`, `CORRECT_TO_LEVEL_UP`. Add `HINT_TIMEOUT_MS = 25000`
+- [x] Update `components/game-board.tsx` — add forced-typing UI (show correct word, different submit behavior), show "Bree is thinking..." during hint chain instead of generic spinner
+- [x] Update `CLAUDE.md` — reflect new architecture (no Flask dependency, static audio, Vercel API route)
+- [x] Verify build passes
 - [ ] Test full flow: word audio, correct answer, incorrect answer with hint, incorrect answer with 4b fallback
 
 ## Acceptance Criteria
