@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     })
 
     const completion = await client.chat.completions.create({
-      model: "",
+      model: openaiDeployment,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         {
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
           content: `The student spelled "${misspelling}" instead of "${correct}".`,
         },
       ],
-      max_completion_tokens: 100,
+      max_tokens: 100,
     })
 
     feedbackText = completion.choices[0]?.message?.content?.trim() ?? ""
