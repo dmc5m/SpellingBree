@@ -58,7 +58,7 @@ export function useAudio(): UseAudio {
   useEffect(() => {
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") {
-        fetch(`${API_BASE}/health`).catch(() => {})
+        fetch(`${API_BASE}/health`, { mode: "no-cors" }).catch(() => {})
       }
     }, KEEPALIVE_INTERVAL_MS)
     return () => clearInterval(interval)

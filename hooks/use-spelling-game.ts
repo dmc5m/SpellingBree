@@ -91,21 +91,15 @@ export function useSpellingGame(): UseSpellingGame {
   }, [progress.level])
 
   const startGame = useCallback(async (audio: UseAudio) => {
-    // Wake the API
-    try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 15000)
-      await fetch(`${API_BASE}/health`, { signal: controller.signal })
-      clearTimeout(timeoutId)
-    } catch {
-      setPhase("error")
-      return
-    }
+    // Wake the API with a no-cors health ping (CORS only covers /api/* routes).
+    // Don't block the game on it — just fire and forget to warm the server.
+    fetch(`${API_BASE}/health`, { mode: "no-cors" }).catch(() => {})
 
     setPhase("playing")
     const word = pickWord()
 
-    // Speak the word, then prefetch standalone word audio
+    // Speak the word, then prefetch standalone word audio.
+    // If TTS fails (cold start, network), the text fallback will show.
     try {
       await audio.speak(`Level ${progress.level}. Please spell the word... ${word}`)
     } catch {
