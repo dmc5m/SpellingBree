@@ -40,26 +40,26 @@ const BUFFER_4B = "buffer/buffer-4b.mp3"
 
 const BUFFER_PAUSE_MS = 1000
 
+function detectIOSSafari(): boolean {
+  if (typeof navigator === "undefined") return false
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+  return isIOS || isSafari
+}
+
 export function useAudio(): UseAudio {
   const [isPlaying, setIsPlaying] = useState(false)
   const [isInHintChain, setIsInHintChain] = useState(false)
-  const [unlockRequired, setUnlockRequired] = useState(false)
+  const [unlockRequired, setUnlockRequired] = useState(detectIOSSafari)
 
   const audioContextRef = useRef<AudioContext | null>(null)
   const activeSourceRef = useRef<AudioBufferSourceNode | null>(null)
   const safetyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hintAbortRef = useRef<AbortController | null>(null)
-  const chainAbortedRef = useRef(false)
+  // Monotonically increasing ID — each playStatic/playSequence/speakHint
+  // gets its own ID so stale sequences can't interfere with newer ones.
+  const sequenceIdRef = useRef(0)
   const audioCache = useRef<Map<string, AudioBuffer>>(new Map())
-
-  // Detect iOS/Safari on mount
-  useEffect(() => {
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
-    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
-    if (isIOS || isSafari) {
-      setUnlockRequired(true)
-    }
-  }, [])
 
   // Resume AudioContext when app returns from background (iOS suspends it)
   useEffect(() => {
@@ -160,7 +160,8 @@ export function useAudio(): UseAudio {
 
   // ── Stop everything ────────────────────────────────────────────
   const stop = useCallback(() => {
-    chainAbortedRef.current = true
+    // Bump sequence ID so any in-flight playback knows it's stale
+    sequenceIdRef.current++
     hintAbortRef.current?.abort()
     hintAbortRef.current = null
     if (safetyTimeoutRef.current) {
@@ -195,12 +196,14 @@ export function useAudio(): UseAudio {
   const playStatic = useCallback(
     async (path: string): Promise<void> => {
       stop()
+      const myId = ++sequenceIdRef.current
       setIsPlaying(true)
       try {
         const decoded = await loadAudioBuffer(path)
+        if (sequenceIdRef.current !== myId) return
         await playDecodedBuffer(decoded)
       } finally {
-        setIsPlaying(false)
+        if (sequenceIdRef.current === myId) setIsPlaying(false)
       }
     },
     [stop],
@@ -210,17 +213,17 @@ export function useAudio(): UseAudio {
   const playSequence = useCallback(
     async (paths: string[]): Promise<void> => {
       stop()
-      chainAbortedRef.current = false
+      const myId = ++sequenceIdRef.current
       setIsPlaying(true)
       try {
         for (const path of paths) {
-          if (chainAbortedRef.current) break
+          if (sequenceIdRef.current !== myId) break
           const decoded = await loadAudioBuffer(path)
-          if (chainAbortedRef.current) break
+          if (sequenceIdRef.current !== myId) break
           await playDecodedBuffer(decoded)
         }
       } finally {
-        setIsPlaying(false)
+        if (sequenceIdRef.current === myId) setIsPlaying(false)
       }
     },
     [stop],
@@ -233,7 +236,7 @@ export function useAudio(): UseAudio {
       correct: string,
     ): Promise<{ hintFailed: boolean }> => {
       stop()
-      chainAbortedRef.current = false
+      const myId = ++sequenceIdRef.current
       setIsPlaying(true)
       setIsInHintChain(true)
 
@@ -277,19 +280,20 @@ export function useAudio(): UseAudio {
           hintSettled = true
         })
 
-      // Helper: wait ms, resolve early if chain aborted
+      // Helper: check if this sequence is still current
+      const isStale = () => sequenceIdRef.current !== myId
+
+      // Helper: wait ms, resolve early if sequence is stale
       const wait = (ms: number) =>
         new Promise<void>((resolve) => {
-          const id = setTimeout(resolve, ms)
-          // If chain gets aborted during wait, resolve early
+          const tid = setTimeout(resolve, ms)
           const check = setInterval(() => {
-            if (chainAbortedRef.current) {
-              clearTimeout(id)
+            if (isStale()) {
+              clearTimeout(tid)
               clearInterval(check)
               resolve()
             }
           }, 50)
-          // Clean up interval when timeout fires naturally
           setTimeout(() => clearInterval(check), ms + 100)
         })
 
@@ -299,7 +303,7 @@ export function useAudio(): UseAudio {
 
       // Helper: play the GPT hint audio
       const playHint = async (): Promise<boolean> => {
-        if (!hintAudio || chainAbortedRef.current) return false
+        if (!hintAudio || isStale()) return false
         try {
           const ctx = getOrCreateContext()
           if (ctx.state === "suspended") await ctx.resume()
@@ -313,14 +317,14 @@ export function useAudio(): UseAudio {
 
       try {
         // ── Buffer 1 ──────────────────────────────────────────
-        if (chainAbortedRef.current) return { hintFailed: true }
+        if (isStale()) return { hintFailed: true }
         const buf1 = await loadAudioBuffer(BUFFER_1)
-        if (chainAbortedRef.current) return { hintFailed: true }
+        if (isStale()) return { hintFailed: true }
         await playDecodedBuffer(buf1)
 
         // Wait 1 second, then check
         await wait(BUFFER_PAUSE_MS)
-        if (chainAbortedRef.current) return { hintFailed: true }
+        if (isStale()) return { hintFailed: true }
 
         if (hintReady()) {
           // Hint arrived quickly — play directly, no transition needed
@@ -335,13 +339,13 @@ export function useAudio(): UseAudio {
         }
 
         // ── Buffer 2 ──────────────────────────────────────────
-        if (chainAbortedRef.current) return { hintFailed: true }
+        if (isStale()) return { hintFailed: true }
         const buf2 = await loadAudioBuffer(BUFFER_2)
-        if (chainAbortedRef.current) return { hintFailed: true }
+        if (isStale()) return { hintFailed: true }
         await playDecodedBuffer(buf2)
 
         await wait(BUFFER_PAUSE_MS)
-        if (chainAbortedRef.current) return { hintFailed: true }
+        if (isStale()) return { hintFailed: true }
 
         if (hintReady()) {
           // Play 4a transition then hint
@@ -357,13 +361,13 @@ export function useAudio(): UseAudio {
         }
 
         // ── Buffer 3 ──────────────────────────────────────────
-        if (chainAbortedRef.current) return { hintFailed: true }
+        if (isStale()) return { hintFailed: true }
         const buf3 = await loadAudioBuffer(BUFFER_3)
-        if (chainAbortedRef.current) return { hintFailed: true }
+        if (isStale()) return { hintFailed: true }
         await playDecodedBuffer(buf3)
 
         await wait(BUFFER_PAUSE_MS)
-        if (chainAbortedRef.current) return { hintFailed: true }
+        if (isStale()) return { hintFailed: true }
 
         if (hintReady()) {
           const buf4a = await loadAudioBuffer(BUFFER_4A)
@@ -384,14 +388,16 @@ export function useAudio(): UseAudio {
         }
 
         const buf4b = await loadAudioBuffer(BUFFER_4B)
-        if (chainAbortedRef.current) return { hintFailed: true }
+        if (isStale()) return { hintFailed: true }
         await playDecodedBuffer(buf4b)
         return { hintFailed: true }
       } finally {
         clearTimeout(timeoutId)
         hintAbortRef.current = null
-        setIsPlaying(false)
-        setIsInHintChain(false)
+        if (sequenceIdRef.current === myId) {
+          setIsPlaying(false)
+          setIsInHintChain(false)
+        }
       }
     },
     [stop],
