@@ -165,17 +165,60 @@ export function useAudio(): UseAudio {
     isSpeakingRef.current = true
     setIsPlaying(true)
 
-    // Check cache first
-    const cached = audioCache.current.get(text)
-    if (cached) {
+    try {
+      // Check cache first
+      const cached = audioCache.current.get(text)
+      if (cached) {
+        const ctx = getOrCreateContext()
+        if (ctx.state === "suspended") await ctx.resume()
+        const source = ctx.createBufferSource()
+        source.buffer = cached
+        source.connect(ctx.destination)
+        activeSourceRef.current = source
+
+        return await new Promise<void>((resolve) => {
+          const cleanup = () => {
+            activeSourceRef.current = null
+            isSpeakingRef.current = false
+            setIsPlaying(false)
+            if (safetyTimeoutRef.current) {
+              clearTimeout(safetyTimeoutRef.current)
+              safetyTimeoutRef.current = null
+            }
+            resolve()
+          }
+          source.onended = cleanup
+          safetyTimeoutRef.current = setTimeout(() => {
+            try { source.stop() } catch {}
+            cleanup()
+          }, (cached.duration + 2) * 1000)
+          source.start(0)
+        })
+      }
+
+      // Fetch from TTS API
+      const controller = new AbortController()
+      currentAbortRef.current = controller
+      const params = new URLSearchParams({ text, rate: TTS_RATE.toString() })
+      const raw = await fetchAudioBuffer(`${API_BASE}/api/tts?${params}`, TTS_TIMEOUT_MS, controller.signal)
+
+      if (!raw) {
+        throw new Error("TTS fetch failed")
+      }
+
+      // Decode and cache
       const ctx = getOrCreateContext()
       if (ctx.state === "suspended") await ctx.resume()
+      const decoded = await ctx.decodeAudioData(raw)
+      audioCache.current.set(text, decoded)
+
+      // Play through AudioContext
       const source = ctx.createBufferSource()
-      source.buffer = cached
+      source.buffer = decoded
       source.connect(ctx.destination)
       activeSourceRef.current = source
 
-      return new Promise<void>((resolve) => {
+      return await new Promise<void>((resolve) => {
         const cleanup = () => {
           activeSourceRef.current = null
           isSpeakingRef.current = false
@@ -190,53 +233,14 @@ export function useAudio(): UseAudio {
         safetyTimeoutRef.current = setTimeout(() => {
           try { source.stop() } catch {}
           cleanup()
-        }, (cached.duration + 2) * 1000)
+        }, (decoded.duration + 2) * 1000)
         source.start(0)
       })
-    }
-
-    // Fetch from TTS API
-    const controller = new AbortController()
-    currentAbortRef.current = controller
-    const params = new URLSearchParams({ text, rate: TTS_RATE.toString() })
-    const raw = await fetchAudioBuffer(`${API_BASE}/api/tts?${params}`, TTS_TIMEOUT_MS, controller.signal)
-
-    if (!raw) {
+    } catch (err) {
       isSpeakingRef.current = false
       setIsPlaying(false)
-      throw new Error("TTS fetch failed")
+      throw err
     }
-
-    // Decode and cache
-    const ctx = getOrCreateContext()
-    if (ctx.state === "suspended") await ctx.resume()
-    const decoded = await ctx.decodeAudioData(raw)
-    audioCache.current.set(text, decoded)
-
-    // Play through AudioContext
-    const source = ctx.createBufferSource()
-    source.buffer = decoded
-    source.connect(ctx.destination)
-    activeSourceRef.current = source
-
-    return new Promise<void>((resolve) => {
-      const cleanup = () => {
-        activeSourceRef.current = null
-        isSpeakingRef.current = false
-        setIsPlaying(false)
-        if (safetyTimeoutRef.current) {
-          clearTimeout(safetyTimeoutRef.current)
-          safetyTimeoutRef.current = null
-        }
-        resolve()
-      }
-      source.onended = cleanup
-      safetyTimeoutRef.current = setTimeout(() => {
-        try { source.stop() } catch {}
-        cleanup()
-      }, (decoded.duration + 2) * 1000)
-      source.start(0)
-    })
   }, [stop])
 
   const speakHint = useCallback(async (misspelling: string, correct: string): Promise<{ hintFailed: boolean }> => {
