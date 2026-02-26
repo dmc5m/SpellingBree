@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import Confetti from "@/components/confetti"
-import type { UseAudio } from "@/hooks/use-audio"
 import type { LastResult } from "@/hooks/use-spelling-game"
 
 interface GameBoardProps {
@@ -19,6 +18,7 @@ interface GameBoardProps {
   lastResult: LastResult
   showConfetti: boolean
   isPlaying: boolean
+  isInHintChain: boolean
   onSubmit: (answer: string) => void
   onSkip: () => void
   onSayItAgain: () => void
@@ -33,6 +33,7 @@ export function GameBoard({
   lastResult,
   showConfetti,
   isPlaying,
+  isInHintChain,
   onSubmit,
   onSkip,
   onSayItAgain,
@@ -41,10 +42,15 @@ export function GameBoard({
   const [answer, setAnswer] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // Buttons are locked during audio playback or hint chain
+  const buttonsLocked = isPlaying || isInHintChain
+  // Input is only locked during playback or hint chain, UNLESS in show-word mode
+  const inShowWord = lastResult?.kind === "show-word"
+  const inputLocked = inShowWord ? false : buttonsLocked
+
   // Clear answer when word changes or on correct answer
   useEffect(() => {
     setAnswer("")
-    // Refocus input after word changes
     inputRef.current?.focus()
   }, [currentWord])
 
@@ -55,9 +61,19 @@ export function GameBoard({
     }
   }, [lastResult])
 
+  // Focus input when entering show-word mode
+  useEffect(() => {
+    if (inShowWord) {
+      setAnswer("")
+      inputRef.current?.focus()
+    }
+  }, [inShowWord])
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!answer.trim() || isPlaying) return
+    if (!answer.trim()) return
+    // In show-word mode, always allow submit
+    if (!inShowWord && buttonsLocked) return
     onSubmit(answer)
   }
 
@@ -66,9 +82,6 @@ export function GameBoard({
       onReset()
     }
   }
-
-  // Determine if TTS failed — show word as text fallback
-  const ttsFailed = lastResult === null && !isPlaying && currentWord !== ""
 
   return (
     <main className="h-screen overflow-y-auto bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4 md:p-8">
@@ -128,30 +141,58 @@ export function GameBoard({
           <Card className="p-8 md:p-12 bg-card/80 backdrop-blur-sm border-2 shadow-2xl">
             <div className="text-center mb-8">
               <motion.div
-                key={currentWord}
+                key={inShowWord ? "show-word" : currentWord}
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 className="inline-flex items-center gap-3 mb-6"
               >
-                <Sparkles className="w-8 h-8 text-accent" />
-                <h2 className="text-3xl md:text-4xl font-bold text-foreground">Listen & Spell!</h2>
-                <Sparkles className="w-8 h-8 text-primary" />
+                {inShowWord ? (
+                  <>
+                    <Sparkles className="w-8 h-8 text-secondary" />
+                    <h2 className="text-3xl md:text-4xl font-bold text-foreground">Type It Out!</h2>
+                    <Sparkles className="w-8 h-8 text-secondary" />
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-8 h-8 text-accent" />
+                    <h2 className="text-3xl md:text-4xl font-bold text-foreground">Listen & Spell!</h2>
+                    <Sparkles className="w-8 h-8 text-primary" />
+                  </>
+                )}
               </motion.div>
+
+              {/* Show correct word prominently in forced-typing mode */}
+              {inShowWord && (
+                <motion.div
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  className="mb-6 p-4 rounded-2xl bg-secondary/20 border-2 border-secondary"
+                >
+                  <p className="text-sm font-medium text-foreground/60 mb-1">The word is:</p>
+                  <p className="text-4xl md:text-5xl font-black text-secondary tracking-wider">
+                    {lastResult.word}
+                  </p>
+                </motion.div>
+              )}
 
               <div className="flex gap-3 justify-center mb-8">
                 <Button
                   onClick={onSayItAgain}
-                  disabled={isPlaying}
+                  disabled={buttonsLocked || inShowWord}
                   size="lg"
                   className="bg-secondary hover:bg-secondary/90 text-secondary-foreground font-bold shadow-lg disabled:opacity-50"
                 >
-                  {isPlaying ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Volume2 className="w-5 h-5 mr-2" />}
+                  {isPlaying && !isInHintChain ? (
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  ) : (
+                    <Volume2 className="w-5 h-5 mr-2" />
+                  )}
                   Say It Again
                 </Button>
 
                 <Button
                   onClick={onSkip}
-                  disabled={isPlaying}
+                  disabled={buttonsLocked || inShowWord}
                   variant="outline"
                   size="lg"
                   className="font-bold border-2 bg-transparent disabled:opacity-50"
@@ -169,8 +210,8 @@ export function GameBoard({
                   type="text"
                   value={answer}
                   onChange={(e) => setAnswer(e.target.value)}
-                  disabled={isPlaying}
-                  placeholder="Type your answer here..."
+                  disabled={inputLocked}
+                  placeholder={inShowWord ? "Type the word above..." : "Type your answer here..."}
                   className="text-2xl md:text-3xl h-16 md:h-20 text-center font-bold border-4 focus-visible:ring-4 focus-visible:ring-primary/50 disabled:opacity-50"
                   autoFocus
                   autoComplete="off"
@@ -182,15 +223,22 @@ export function GameBoard({
 
               <Button
                 type="submit"
-                disabled={isPlaying || !answer.trim()}
+                disabled={(!inShowWord && buttonsLocked) || !answer.trim()}
                 size="lg"
                 className="w-full h-14 text-xl font-bold bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg disabled:opacity-50"
               >
-                {isPlaying ? (
+                {isInHintChain ? (
+                  <>
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    Bree is thinking...
+                  </>
+                ) : isPlaying ? (
                   <>
                     <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                     Please wait...
                   </>
+                ) : inShowWord ? (
+                  "Check Spelling"
                 ) : (
                   "Check Answer"
                 )}
@@ -198,7 +246,7 @@ export function GameBoard({
             </form>
 
             <AnimatePresence mode="wait">
-              {lastResult !== null && (
+              {lastResult !== null && lastResult.kind !== "show-word" && (
                 <motion.div
                   initial={{ scale: 0.8, opacity: 0, y: 10 }}
                   animate={{ scale: 1, opacity: 1, y: 0 }}
@@ -215,6 +263,8 @@ export function GameBoard({
                       <span>Amazing! That&apos;s correct!</span>
                       <Star className="w-6 h-6 fill-current" />
                     </div>
+                  ) : isInHintChain ? (
+                    <span>Listen to Bree&apos;s hint...</span>
                   ) : lastResult.hintFailed ? (
                     <span>Not quite! Try again!</span>
                   ) : (

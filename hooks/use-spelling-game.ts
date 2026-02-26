@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import { getMaxLevel, getRandomWord } from "@/lib/words"
-import { API_BASE } from "@/lib/config"
 import { CORRECT_TO_LEVEL_UP } from "@/lib/config"
 import type { UseAudio } from "@/hooks/use-audio"
 
@@ -11,6 +10,7 @@ export type GamePhase = "loading" | "audio-unlock" | "splash" | "playing" | "com
 export type LastResult =
   | { kind: "correct" }
   | { kind: "incorrect"; hintFailed: boolean }
+  | { kind: "show-word"; word: string }
   | null
 
 interface GameProgress {
@@ -38,8 +38,17 @@ function saveProgress(level: number, correctCount: number) {
     localStorage.setItem("level", level.toString())
     localStorage.setItem("correctCount", correctCount.toString())
   } catch {
-    // localStorage unavailable (e.g. private browsing) — silently ignore
+    // localStorage unavailable — silently ignore
   }
+}
+
+// ── Audio path helpers ─────────────────────────────────────────
+function wordPath(word: string): string {
+  return `words/${word}.mp3`
+}
+
+function levelPath(level: number): string {
+  return `phrases/level-${level}.mp3`
 }
 
 export interface UseSpellingGame {
@@ -90,27 +99,53 @@ export function useSpellingGame(): UseSpellingGame {
     return word
   }, [progress.level])
 
-  const startGame = useCallback(async (audio: UseAudio) => {
-    // Wake the API with a no-cors health ping (CORS only covers /api/* routes).
-    // Don't block the game on it — just fire and forget to warm the server.
-    fetch(`${API_BASE}/health`, { mode: "no-cors" }).catch(() => {})
+  /** Speak "Level N" + "Please spell the word" + word */
+  async function speakWordPrompt(audio: UseAudio, word: string, level: number) {
+    await audio.playSequence([
+      levelPath(level),
+      "phrases/spell-the-word.mp3",
+      wordPath(word),
+    ])
+  }
 
+  const startGame = useCallback(async (audio: UseAudio) => {
     setPhase("playing")
     const word = pickWord()
 
-    // Speak the word, then prefetch standalone word audio.
-    // If TTS fails (cold start, network), the text fallback will show.
     try {
-      await audio.speak(`Level ${progress.level}. Please spell the word... ${word}`)
+      await speakWordPrompt(audio, word, progress.level)
     } catch {
-      // TTS failed on first word — game still starts, text fallback will show
+      // Audio failed — text fallback will show
     }
-    audio.prefetch(word)
+    // Preload the standalone word for "Say It Again"
+    audio.preload(wordPath(word))
   }, [pickWord, progress.level])
 
   const checkAnswer = useCallback(async (answer: string, audio: UseAudio) => {
     const trimmed = answer.trim().toLowerCase()
     if (!trimmed) return
+
+    // If in "show-word" sub-state, check if they typed the correct word
+    if (lastResult?.kind === "show-word") {
+      if (trimmed === lastResult.word.toLowerCase()) {
+        // Correct! Play encouragement and move to next word
+        setLastResult(null)
+        try {
+          await audio.playStatic("phrases/now-you-got-it.mp3")
+        } catch {}
+
+        const nextWord = pickWord()
+        try {
+          await audio.playSequence([
+            "phrases/spell-the-word.mp3",
+            wordPath(nextWord),
+          ])
+        } catch {}
+        audio.preload(wordPath(nextWord))
+      }
+      // If wrong, just stay — they'll see the correct word and try again
+      return
+    }
 
     const newAttempts = progress.attempts + 1
 
@@ -131,7 +166,7 @@ export function useSpellingGame(): UseSpellingGame {
         setShowConfetti(true)
 
         try {
-          await audio.speak("Congratulations! You finished all the levels! Amazing job!")
+          await audio.playStatic("phrases/completed.mp3")
         } catch {}
 
         setPhase("completed")
@@ -148,9 +183,9 @@ export function useSpellingGame(): UseSpellingGame {
 
       try {
         if (leveledUp) {
-          await audio.speak(`Great job! You spelled it correctly. Moving on to level ${newLevel}.`)
+          await audio.playStatic("phrases/correct-level-up.mp3")
         } else {
-          await audio.speak("Great job! You spelled the word correctly.")
+          await audio.playStatic("phrases/correct.mp3")
         }
       } catch {}
 
@@ -161,21 +196,25 @@ export function useSpellingGame(): UseSpellingGame {
         const nextWord = pickWord(newLevel)
 
         try {
-          await audio.speak(`Please spell the word... ${nextWord}`)
+          await audio.playSequence([
+            "phrases/spell-the-word.mp3",
+            wordPath(nextWord),
+          ])
         } catch {}
-        audio.prefetch(nextWord)
+        audio.preload(wordPath(nextWord))
       }, 2000)
     } else {
-      // Incorrect
+      // Incorrect — run the hint buffer chain
       setProgress((prev) => ({ ...prev, attempts: newAttempts }))
       setLastResult({ kind: "incorrect", hintFailed: false })
 
       const result = await audio.speakHint(trimmed, currentWord)
       if (result.hintFailed) {
-        setLastResult({ kind: "incorrect", hintFailed: true })
+        // Buffer chain ended with 4b — show the word for forced typing
+        setLastResult({ kind: "show-word", word: currentWord })
       }
     }
-  }, [currentWord, progress, pickWord])
+  }, [currentWord, progress, pickWord, lastResult])
 
   const skip = useCallback((audio: UseAudio) => {
     audio.stop()
@@ -184,14 +223,16 @@ export function useSpellingGame(): UseSpellingGame {
     setShowConfetti(false)
 
     const word = pickWord()
-    // Fire and forget — don't await so the UI updates immediately
-    audio.speak(`Please spell the word... ${word}`).catch(() => {})
-    audio.prefetch(word)
+    audio.playSequence([
+      "phrases/spell-the-word.mp3",
+      wordPath(word),
+    ]).catch(() => {})
+    audio.preload(wordPath(word))
   }, [pickWord])
 
   const sayItAgain = useCallback((audio: UseAudio) => {
     audio.stop()
-    audio.speak(currentWord).catch(() => {})
+    audio.playStatic(wordPath(currentWord)).catch(() => {})
   }, [currentWord])
 
   const reset = useCallback((audio: UseAudio) => {
@@ -209,8 +250,12 @@ export function useSpellingGame(): UseSpellingGame {
     setLastResult(null)
 
     const word = pickWord(1)
-    audio.speak(`Level 1. Please spell the word... ${word}`).catch(() => {})
-    audio.prefetch(word)
+    audio.playSequence([
+      levelPath(1),
+      "phrases/spell-the-word.mp3",
+      wordPath(word),
+    ]).catch(() => {})
+    audio.preload(wordPath(word))
   }, [pickWord])
 
   return {
