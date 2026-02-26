@@ -14,7 +14,7 @@ const levels = {
   1: ["drew", "suit", "true", "threw", "bruise", "grew"],
   2: ["fruit", "flew", "glue", "blue", "new"],
   3: ["month", "few", "continue", "newborn"],
-  4: ["fruity", "suited", "cute", "sidelwalk"],
+  4: ["fruity", "suited", "cute", "sidewalk"],
 }
 
 const API_BASE = "https://gratitude-web-app4-gsfxc4cpfugcggbt.westus-01.azurewebsites.net"
