@@ -1,509 +1,123 @@
 "use client"
 
-import type React from "react"
-
-import { useState, useEffect, useRef } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import { Sparkles, Volume2, SkipForward, Star, Trophy, Zap, Loader2, RotateCcw } from "lucide-react"
+import { useEffect, useCallback } from "react"
+import { MotionConfig } from "framer-motion"
+import { useAudio } from "@/hooks/use-audio"
+import { useSpellingGame } from "@/hooks/use-spelling-game"
+import { SplashScreen } from "@/components/splash-screen"
+import { AudioUnlock } from "@/components/audio-unlock"
+import { GameBoard } from "@/components/game-board"
+import { Celebration } from "@/components/celebration"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card } from "@/components/ui/card"
-import Confetti from "@/components/confetti"
-
-const levels = {
-  1: ["drew", "suit", "true", "threw", "bruise", "grew"],
-  2: ["fruit", "flew", "glue", "blue", "new"],
-  3: ["month", "few", "continue", "newborn"],
-  4: ["fruity", "suited", "cute", "sidewalk"],
-}
-
-const API_BASE = "https://gratitude-web-app4-gsfxc4cpfugcggbt.westus-01.azurewebsites.net"
+import { RotateCcw } from "lucide-react"
 
 export default function SpellingBee() {
-  const [needsAudioUnlock, setNeedsAudioUnlock] = useState(false)
-  const [showSplash, setShowSplash] = useState(true)
-  const [currentLevel, setCurrentLevel] = useState(1)
-  const [correctCount, setCorrectCount] = useState(0)
-  const [attempts, setAttempts] = useState(0)
-  const [currentWord, setCurrentWord] = useState("")
-  const [answer, setAnswer] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [showConfetti, setShowConfetti] = useState(false)
-  const [feedback, setFeedback] = useState("")
-  const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
+  const audio = useAudio()
+  const game = useSpellingGame()
 
-  const rate = -30
-  // Shared AudioContext for Safari to reuse unlocked state (useRef survives re-renders)
-  const sharedAudioContextRef = useRef<AudioContext | null>(null)
-  // Cache TTS audio to avoid redundant API calls for repeated phrases
-  const audioCacheRef = useRef<Map<string, ArrayBuffer>>(new Map())
-
+  // On mount: detect phase and initialize
   useEffect(() => {
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
-    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
-    const audioUnlocked = localStorage.getItem("audioUnlocked")
-
-    if (isIOS || isSafari) {
-      // Always re-run the audio unlock on iOS and Safari, regardless of stored flag
-      setNeedsAudioUnlock(true)
-      setShowSplash(false)
-      return
+    if (audio.unlockRequired) {
+      game.setPhase("audio-unlock")
+    } else {
+      game.setPhase("splash")
     }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-    const savedLevel = localStorage.getItem("level")
-    const savedCorrect = localStorage.getItem("correctCount")
-    const levelToUse = savedLevel ? Number.parseInt(savedLevel) : 1
-    const correctToUse = savedCorrect ? Number.parseInt(savedCorrect) : 0
-
-    if (savedLevel) setCurrentLevel(levelToUse)
-    if (savedCorrect) setCorrectCount(correctToUse)
-
-    const init = async () => {
-      await wakeApi()
-      setShowSplash(false)
-      pickWord(levelToUse)
-    }
-    init()
-  }, [])
-
-  // Keep the TTS API warm to avoid cold-start delays
+  // When phase transitions to splash, start the game
   useEffect(() => {
-    const interval = setInterval(() => {
-      fetch(`${API_BASE}/health`).catch(() => {})
-    }, 5 * 60 * 1000)
-    return () => clearInterval(interval)
-  }, [])
-
-  function unlockAudio() {
-    // Kid-friendly: optional short gentle chime or silence
-    const context = new (window.AudioContext || (window as any).webkitAudioContext)()
-    sharedAudioContextRef.current = context
-    try {
-      const oscillator = context.createOscillator()
-      const gainNode = context.createGain()
-      oscillator.type = "sine"
-      oscillator.frequency.setValueAtTime(660, context.currentTime) // softer tone
-      gainNode.gain.setValueAtTime(0.05, context.currentTime) // very quiet
-      oscillator.connect(gainNode)
-      gainNode.connect(context.destination)
-      oscillator.start()
-      oscillator.stop(context.currentTime + 0.1)
-    } catch {
-      console.warn("Skipping tone, silent unlock")
+    if (game.phase === "splash") {
+      game.startGame(audio)
     }
+  }, [game.phase]) // eslint-disable-line react-hooks/exhaustive-deps
 
-    if (context.state === "suspended") {
-      context.resume().catch((err) => {
-        console.error("AudioContext resume failed:", err)
-      })
-    }
+  const handleUnlock = useCallback(async () => {
+    await audio.unlock()
+    game.setPhase("splash")
+  }, [audio, game])
 
-    // Proceed regardless of playback success
-    localStorage.setItem("audioUnlocked", "true")
-    setNeedsAudioUnlock(false)
-    setShowSplash(true)
+  const handleSubmit = useCallback((answer: string) => {
+    game.checkAnswer(answer, audio)
+  }, [audio, game])
 
-    const savedLevel = localStorage.getItem("level")
-    const savedCorrect = localStorage.getItem("correctCount")
-    const levelToUse = savedLevel ? Number.parseInt(savedLevel) : 1
-    const correctToUse = savedCorrect ? Number.parseInt(savedCorrect) : 0
+  const handleSkip = useCallback(() => {
+    game.skip(audio)
+  }, [audio, game])
 
-    if (savedLevel) setCurrentLevel(levelToUse)
-    if (savedCorrect) setCorrectCount(correctToUse)
+  const handleSayItAgain = useCallback(() => {
+    game.sayItAgain(audio)
+  }, [audio, game])
 
-    const init = async () => {
-      await wakeApi()
-      setShowSplash(false)
-      pickWord(levelToUse)
-    }
-    init()
-  }
+  const handleReset = useCallback(() => {
+    game.reset(audio)
+    game.setPhase("playing")
+  }, [audio, game])
 
-  async function wakeApi() {
-    try {
-      await fetch(`${API_BASE}/health`)
-    } catch (e) {
-      console.error("Error waking API:", e)
-    }
-  }
+  const handleResetFromCelebration = useCallback(() => {
+    game.reset(audio)
+    game.setPhase("playing")
+  }, [audio, game])
 
-  async function prefetchAudio(text: string) {
-    if (audioCacheRef.current.has(text)) return
-    const params = new URLSearchParams({ text, rate: rate.toString() })
-    try {
-      const res = await fetch(`${API_BASE}/api/tts?${params.toString()}`)
-      if (res.ok) {
-        const blob = await res.blob()
-        audioCacheRef.current.set(text, await blob.arrayBuffer())
-      }
-    } catch {}
-  }
-
-  async function speak(text: string) {
-    if (isLoading) return
-    setIsLoading(true)
-
-    let arrayBuffer = audioCacheRef.current.get(text)
-
-    if (!arrayBuffer) {
-      const params = new URLSearchParams({ text, rate: rate.toString() })
-      try {
-        const res = await fetch(`${API_BASE}/api/tts?${params.toString()}`, { method: "GET" })
-        if (!res.ok) {
-          console.error("TTS error:", await res.text())
-          setIsLoading(false)
-          return
-        }
-        const blob = await res.blob()
-        arrayBuffer = await blob.arrayBuffer()
-        audioCacheRef.current.set(text, arrayBuffer)
-      } catch (err) {
-        console.error("Error:", err)
-        setIsLoading(false)
-        return
-      }
-    }
-
-    const audioContext = sharedAudioContextRef.current
-    if (audioContext) {
-      try {
-        const buffer = await audioContext.decodeAudioData(arrayBuffer.slice(0))
-        const source = audioContext.createBufferSource()
-        source.buffer = buffer
-        source.connect(audioContext.destination)
-        source.start(0)
-        source.onended = () => setIsLoading(false)
-      } catch (err) {
-        console.error("Error playing through AudioContext:", err)
-        setIsLoading(false)
-      }
-    } else {
-      const blob = new Blob([arrayBuffer])
-      const blobUrl = URL.createObjectURL(blob)
-      const audio = new Audio(blobUrl)
-      audio.play()
-      audio.onended = () => {
-        URL.revokeObjectURL(blobUrl)
-        setIsLoading(false)
-      }
-      audio.onerror = () => {
-        URL.revokeObjectURL(blobUrl)
-        setIsLoading(false)
-      }
-    }
-  }
-
-  function pickWord(level?: number) {
-    const levelToUse = level ?? currentLevel
-    const words = levels[levelToUse as keyof typeof levels]
-    const word = words[Math.floor(Math.random() * words.length)]
-    setCurrentWord(word)
-    setAnswer("")
-    setIsCorrect(null)
-    setFeedback("")
-    speak(`Level ${levelToUse}. Please spell the word... ${word}`)
-    // Prefetch standalone word audio so "Say It Again" is instant
-    prefetchAudio(word)
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!answer.trim() || isLoading) return
-
-    const newAttempts = attempts + 1
-    setAttempts(newAttempts)
-    const userAnswer = answer.trim().toLowerCase()
-
-    if (userAnswer === currentWord.toLowerCase()) {
-      const newCorrect = correctCount + 1
-      setCorrectCount(newCorrect)
-      setIsCorrect(true)
-      setShowConfetti(true)
-      localStorage.setItem("correctCount", newCorrect.toString())
-      localStorage.setItem("level", currentLevel.toString())
-
-      if (newCorrect % 5 === 0 && currentLevel < Object.keys(levels).length) {
-        const newLevel = currentLevel + 1
-        setCurrentLevel(newLevel)
-        localStorage.setItem("level", newLevel.toString())
-        await speak(`Great job! You spelled it correctly. Moving on to level ${newLevel}.`)
-      } else {
-        await speak(`Great job! You spelled the word correctly.`)
-      }
-
-      setTimeout(() => {
-        setShowConfetti(false)
-        pickWord()
-      }, 2000)
-    } else {
-      setIsCorrect(false)
-      setIsLoading(true)
-      try {
-        const payload = { misspelling: userAnswer, correct: currentWord, rate }
-        const res = await fetch(`${API_BASE}/api/speller-voice`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-        if (res.ok) {
-          const blob = await res.blob()
-          const blobUrl = URL.createObjectURL(blob)
-          const audio = new Audio(blobUrl)
-          audio.play()
-          audio.onended = () => {
-            URL.revokeObjectURL(blobUrl)
-            setIsLoading(false)
-          }
-          audio.onerror = () => {
-            URL.revokeObjectURL(blobUrl)
-            setIsLoading(false)
-          }
-        } else {
-          setIsLoading(false)
-        }
-      } catch (err) {
-        console.error("Error:", err)
-        setIsLoading(false)
-      }
-    }
-  }
-
-  function resetLevel() {
-    if (confirm("Are you sure you want to reset your progress? This will take you back to Level 1.")) {
-      localStorage.removeItem("level")
-      localStorage.removeItem("correctCount")
-      setCurrentLevel(1)
-      setCorrectCount(0)
-      setAttempts(0)
-      pickWord(1)
-    }
-  }
-
-  if (needsAudioUnlock) {
-    return (
-      <div className="relative z-50 h-screen bg-gradient-to-br from-primary/20 via-secondary/20 to-accent/20 flex items-center justify-center p-4">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.5 }}
-          className="text-center max-w-md"
-        >
-          <motion.div
-            animate={{ scale: [1, 1.1, 1] }}
-            transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY }}
-            className="mb-8"
-          >
-            <Volume2 className="w-24 h-24 mx-auto text-primary" />
-          </motion.div>
-          <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-primary via-secondary to-accent mb-4">
-            Enable Audio
-          </h1>
-          <p className="text-lg text-foreground/80 mb-8">Tap the button below to enable audio for the spelling game</p>
-          <Button
-            onClick={unlockAudio}
-            size="lg"
-            style={{ pointerEvents: "auto", touchAction: "manipulation" }}
-            className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground font-bold text-xl px-8 py-6 shadow-lg cursor-pointer"
-          >
-            <Volume2 className="w-6 h-6 mr-2" />
-            Start Game
-          </Button>
-        </motion.div>
-      </div>
-    )
-  }
-
-  if (showSplash) {
-    return (
-      <div className="h-screen bg-gradient-to-br from-primary/20 via-background to-secondary/20 flex items-center justify-center p-4">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.5 }}
-          className="text-center"
-        >
-          <motion.h1
-            className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-primary via-secondary to-accent mb-4 text-balance"
-            animate={{ scale: [1, 1.05, 1] }}
-            transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY }}
-          >
-            Spelling Bee!!!!!
-          </motion.h1>
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
-            className="inline-block"
-          >
-            <Sparkles className="w-12 h-12 text-accent" />
-          </motion.div>
-        </motion.div>
-      </div>
-    )
-  }
+  const handleRetry = useCallback(() => {
+    game.setPhase("splash")
+  }, [game])
 
   return (
-    <main className="h-screen overflow-y-auto bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4 md:p-8">
-      {showConfetti && <Confetti />}
+    <MotionConfig reducedMotion="user">
+      {game.phase === "loading" && null}
 
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-center mb-8">
-          <h1 className="text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-primary via-secondary to-accent mb-4 text-balance">
-            Spelling Bee
-          </h1>
-          <Button onClick={resetLevel} variant="outline" size="sm" className="font-semibold border-2 bg-transparent">
-            <RotateCcw className="w-4 h-4 mr-2" />
-            Reset Level
-          </Button>
-        </motion.div>
+      {game.phase === "audio-unlock" && (
+        <AudioUnlock onUnlock={handleUnlock} />
+      )}
 
-        {/* Stats Bar */}
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="grid grid-cols-3 gap-4 mb-8"
-        >
-          <Card className="p-4 bg-gradient-to-br from-primary/10 to-primary/5 border-2 border-primary/20">
-            <div className="flex items-center gap-2 justify-center">
-              <Trophy className="w-6 h-6 text-primary" />
-              <div>
-                <div className="text-2xl font-bold text-primary">Level {currentLevel}</div>
-                <div className="text-xs text-foreground/60 font-medium">Current Level</div>
-              </div>
-            </div>
-          </Card>
+      {game.phase === "splash" && (
+        <SplashScreen />
+      )}
 
-          <Card className="p-4 bg-gradient-to-br from-accent/10 to-accent/5 border-2 border-accent/20">
-            <div className="flex items-center gap-2 justify-center">
-              <Star className="w-6 h-6 text-accent fill-accent" />
-              <div>
-                <div className="text-2xl font-bold text-accent">{correctCount}</div>
-                <div className="text-xs text-foreground/60 font-medium">Correct</div>
-              </div>
-            </div>
-          </Card>
+      {game.phase === "playing" && (
+        <GameBoard
+          level={game.progress.level}
+          correctCount={game.progress.correctCount}
+          attempts={game.progress.attempts}
+          currentWord={game.currentWord}
+          lastResult={game.lastResult}
+          showConfetti={game.showConfetti}
+          isPlaying={audio.isPlaying}
+          onSubmit={handleSubmit}
+          onSkip={handleSkip}
+          onSayItAgain={handleSayItAgain}
+          onReset={handleReset}
+        />
+      )}
 
-          <Card className="p-4 bg-gradient-to-br from-secondary/10 to-secondary/5 border-2 border-secondary/20">
-            <div className="flex items-center gap-2 justify-center">
-              <Zap className="w-6 h-6 text-secondary" />
-              <div>
-                <div className="text-2xl font-bold text-secondary">{attempts}</div>
-                <div className="text-xs text-foreground/60 font-medium">Total Tries</div>
-              </div>
-            </div>
-          </Card>
-        </motion.div>
+      {game.phase === "completed" && (
+        <Celebration
+          correctCount={game.progress.correctCount}
+          attempts={game.progress.attempts}
+          onReset={handleResetFromCelebration}
+        />
+      )}
 
-        {/* Main Game Card */}
-        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }}>
-          <Card className="p-8 md:p-12 bg-card/80 backdrop-blur-sm border-2 shadow-2xl">
-            <div className="text-center mb-8">
-              <motion.div
-                key={currentWord}
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="inline-flex items-center gap-3 mb-6"
-              >
-                <Sparkles className="w-8 h-8 text-accent" />
-                <h2 className="text-3xl md:text-4xl font-bold text-foreground">Listen & Spell!</h2>
-                <Sparkles className="w-8 h-8 text-primary" />
-              </motion.div>
-
-              <div className="flex gap-3 justify-center mb-8">
-                <Button
-                  onClick={() => speak(currentWord)}
-                  disabled={isLoading}
-                  size="lg"
-                  className="bg-secondary hover:bg-secondary/90 text-secondary-foreground font-bold shadow-lg disabled:opacity-50"
-                >
-                  {isLoading ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Volume2 className="w-5 h-5 mr-2" />}
-                  Say It Again
-                </Button>
-
-                <Button
-                  onClick={pickWord}
-                  disabled={isLoading}
-                  variant="outline"
-                  size="lg"
-                  className="font-bold border-2 bg-transparent disabled:opacity-50"
-                >
-                  <SkipForward className="w-5 h-5 mr-2" />
-                  Skip
-                </Button>
-              </div>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="relative">
-                <Input
-                  type="text"
-                  value={answer}
-                  onChange={(e) => setAnswer(e.target.value)}
-                  disabled={isLoading}
-                  placeholder="Type your answer here..."
-                  className="text-2xl md:text-3xl h-16 md:h-20 text-center font-bold border-4 focus-visible:ring-4 focus-visible:ring-primary/50 disabled:opacity-50"
-                  autoFocus
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                />
-              </div>
-
-              <Button
-                type="submit"
-                disabled={isLoading || !answer.trim()}
-                size="lg"
-                className="w-full h-14 text-xl font-bold bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg disabled:opacity-50"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    Please wait...
-                  </>
-                ) : (
-                  "Check Answer"
-                )}
-              </Button>
-            </form>
-
-            <AnimatePresence mode="wait">
-              {isCorrect !== null && (
-                <motion.div
-                  initial={{ scale: 0.8, opacity: 0, y: 10 }}
-                  animate={{ scale: 1, opacity: 1, y: 0 }}
-                  exit={{ scale: 0.8, opacity: 0, y: -10 }}
-                  className={`mt-6 p-6 rounded-2xl text-center font-bold text-lg ${
-                    isCorrect
-                      ? "bg-accent/20 text-accent border-2 border-accent"
-                      : "bg-destructive/20 text-destructive border-2 border-destructive"
-                  }`}
-                >
-                  {isCorrect ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <Star className="w-6 h-6 fill-current" />
-                      <span>Amazing! That's correct!</span>
-                      <Star className="w-6 h-6 fill-current" />
-                    </div>
-                  ) : (
-                    <span>Not quite! Try again!</span>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </Card>
-        </motion.div>
-
-        {/* Footer */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.4 }}
-          className="text-center mt-8 text-muted-foreground"
-        >
-          <p className="text-sm font-medium">Keep practicing to level up!</p>
-        </motion.div>
-      </div>
-    </main>
+      {game.phase === "error" && (
+        <div className="h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 flex items-center justify-center p-4">
+          <div className="text-center max-w-md">
+            <h1 className="text-3xl font-black text-foreground mb-4">
+              Couldn&apos;t Connect
+            </h1>
+            <p className="text-foreground/60 mb-8">
+              Having trouble reaching the server. Check your internet connection and try again.
+            </p>
+            <Button
+              onClick={handleRetry}
+              size="lg"
+              className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground font-bold text-xl px-8 py-6 shadow-lg"
+            >
+              <RotateCcw className="w-6 h-6 mr-2" />
+              Try Again
+            </Button>
+          </div>
+        </div>
+      )}
+    </MotionConfig>
   )
 }
