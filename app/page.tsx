@@ -83,6 +83,7 @@ export default function SpellingBee() {
           lastResult={game.lastResult}
           showConfetti={game.showConfetti}
           isPlaying={audio.isPlaying}
+          isInHintChain={audio.isInHintChain}
           onSubmit={handleSubmit}
           onSkip={handleSkip}
           onSayItAgain={handleSayItAgain}
