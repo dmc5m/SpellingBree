@@ -1,10 +1,8 @@
 // Weekly UFLI word lists — update this file when David brings new words.
 // Each level is a set of words that share a spelling pattern.
 const WORDS = {
-  1: ["drew", "suit", "true", "threw", "bruise", "grew"],
-  2: ["fruit", "flew", "glue", "blue", "new"],
-  3: ["month", "few", "continue", "newborn"],
-  4: ["fruity", "suited", "cute", "sidewalk"],
+  1: ["polar", "nectar", "collar", "author", "harbor", "actor"],
+  2: ["factor", "dollar", "wizard", "lizard", "whom"],
 } as const satisfies Record<number, readonly string[]>
 
 export function getMaxLevel(): number {
