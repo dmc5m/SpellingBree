@@ -141,11 +141,11 @@ const BUFFERS = [
 async function main() {
   console.log("Generating SpellingBee audio files...\n")
 
-  // Words
+  // Words (embedded in prompt phrase so TTS pronounces clearly)
   console.log("Words:")
   const allWords = Object.values(WORDS).flat()
   for (const word of allWords) {
-    await generateFile("words", `${word}.mp3`, word)
+    await generateFile("words", `${word}.mp3`, `Please spell the word ${word}.`)
   }
 
   // Level announcements

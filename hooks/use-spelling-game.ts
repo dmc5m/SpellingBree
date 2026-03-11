@@ -99,11 +99,10 @@ export function useSpellingGame(): UseSpellingGame {
     return word
   }, [progress.level])
 
-  /** Speak "Level N" + "Please spell the word" + word */
+  /** Speak "Level N" + word prompt (word file includes "Please spell the word") */
   async function speakWordPrompt(audio: UseAudio, word: string, level: number) {
     await audio.playSequence([
       levelPath(level),
-      "phrases/spell-the-word.mp3",
       wordPath(word),
     ])
   }
@@ -117,8 +116,6 @@ export function useSpellingGame(): UseSpellingGame {
     } catch {
       // Audio failed — text fallback will show
     }
-    // Preload the standalone word for "Say It Again"
-    audio.preload(wordPath(word))
   }, [pickWord, progress.level])
 
   const checkAnswer = useCallback(async (answer: string, audio: UseAudio) => {
@@ -136,12 +133,8 @@ export function useSpellingGame(): UseSpellingGame {
 
         const nextWord = pickWord()
         try {
-          await audio.playSequence([
-            "phrases/spell-the-word.mp3",
-            wordPath(nextWord),
-          ])
+          await audio.playStatic(wordPath(nextWord))
         } catch {}
-        audio.preload(wordPath(nextWord))
       }
       // If wrong, just stay — they'll see the correct word and try again
       return
@@ -196,12 +189,8 @@ export function useSpellingGame(): UseSpellingGame {
         const nextWord = pickWord(newLevel)
 
         try {
-          await audio.playSequence([
-            "phrases/spell-the-word.mp3",
-            wordPath(nextWord),
-          ])
+          await audio.playStatic(wordPath(nextWord))
         } catch {}
-        audio.preload(wordPath(nextWord))
       }, 2000)
     } else {
       // Incorrect — run the hint buffer chain
@@ -223,11 +212,7 @@ export function useSpellingGame(): UseSpellingGame {
     setShowConfetti(false)
 
     const word = pickWord()
-    audio.playSequence([
-      "phrases/spell-the-word.mp3",
-      wordPath(word),
-    ]).catch(() => {})
-    audio.preload(wordPath(word))
+    audio.playStatic(wordPath(word)).catch(() => {})
   }, [pickWord])
 
   const sayItAgain = useCallback((audio: UseAudio) => {
@@ -252,10 +237,8 @@ export function useSpellingGame(): UseSpellingGame {
     const word = pickWord(1)
     audio.playSequence([
       levelPath(1),
-      "phrases/spell-the-word.mp3",
       wordPath(word),
     ]).catch(() => {})
-    audio.preload(wordPath(word))
   }, [pickWord])
 
   return {
